@@ -700,10 +700,12 @@ static void renderCharScaled(const GfxRenderer& renderer, GfxRenderer::RenderMod
                              const EpdFontFamily& fontFamily, const uint32_t cp, int cursorX, int cursorY,
                              const bool pixelState, const EpdFontFamily::Style style) {
   if (renderer.grayPlanesAreAbsolute()) renderMode = GfxRenderer::BW;
-  const EpdGlyph* glyph = fontFamily.getGlyph(cp, style);
+  // A fallback glyph indexes its own font's bitmap, not the primary face's.
+  const auto glyphData = fontFamily.getGlyphData(cp, style);
+  const EpdGlyph* glyph = glyphData.glyph;
   if (!glyph) return;
 
-  const EpdFontData* fontData = fontFamily.getData(style);
+  const EpdFontData* fontData = glyphData.fontData;
   const uint8_t* bitmap = renderer.getGlyphBitmap(fontData, glyph);
   if (!bitmap) return;
 
@@ -768,10 +770,12 @@ static void renderCharSmallCaps(const GfxRenderer& renderer, GfxRenderer::Render
                                 const EpdFontFamily& fontFamily, const uint32_t cp, int cursorX, int cursorY,
                                 const bool pixelState, const EpdFontFamily::Style style) {
   if (renderer.grayPlanesAreAbsolute()) renderMode = GfxRenderer::BW;
-  const EpdGlyph* glyph = fontFamily.getGlyph(cp, style);
+  // A fallback glyph indexes its own font's bitmap, not the primary face's.
+  const auto glyphData = fontFamily.getGlyphData(cp, style);
+  const EpdGlyph* glyph = glyphData.glyph;
   if (!glyph) return;
 
-  const EpdFontData* fontData = fontFamily.getData(style);
+  const EpdFontData* fontData = glyphData.fontData;
   const uint8_t* bitmap = renderer.getGlyphBitmap(fontData, glyph);
   if (!bitmap) return;
 
@@ -3003,10 +3007,11 @@ int GfxRenderer::drawScaledCodepoint(const int fontId, const uint32_t cp, const 
   const auto fontIt = fontMap.find(fontId);
   if (fontIt == fontMap.end()) return 0;
   const EpdFontFamily& font = fontIt->second;
-  const EpdGlyph* glyph = font.getGlyph(cp, style);
+  const auto glyphData = font.getGlyphData(cp, style);
+  const EpdGlyph* glyph = glyphData.glyph;
   if (!glyph) return 0;
   const int advance = fp4::toPixel(static_cast<int32_t>(glyph->advanceX) * scale256 / 256);
-  const EpdFontData* fontData = font.getData(style);
+  const EpdFontData* fontData = glyphData.fontData;
   const uint8_t* bitmap = getGlyphBitmap(fontData, glyph);
   if (!bitmap) return advance;
 

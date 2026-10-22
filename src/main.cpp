@@ -229,18 +229,30 @@ EpdFont bitter16BoldItalicFont(&bitter_16_bolditalic);
 EpdFontFamily bitter16FontFamily(&bitter16RegularFont, &bitter16BoldFont, &bitter16ItalicFont, &bitter16BoldItalicFont);
 
 #endif
+// Built-in Chinese glyphs fill in menus, file names and titles without an SD font.
+const EpdFont cjkUi10Font(&cjk_ui_10);
+#if CROSSINK_SCALABLE_FONTS
+const EpdFont cjkUi8Font(&cjk_ui_8);
+const EpdFont cjkUi12Font(&cjk_ui_12);
+#else
+const EpdFont& cjkUi8Font = cjkUi10Font;
+const EpdFont& cjkUi12Font = cjkUi10Font;
+#endif
+
 EpdFont smallFont(&inter_8_regular);
-EpdFontFamily smallFontFamily(&smallFont);
+EpdFontFamily smallFontFamily = EpdFontFamily(&smallFont).withScriptFallback(&cjkUi8Font);
 
 const EpdFont uiSymbols10Font(&ui_symbols_10);
 
 EpdFont ui10RegularFont(&inter_10_regular);
 EpdFont ui10BoldFont(&inter_10_bold);
-EpdFontFamily ui10FontFamily(&ui10RegularFont, &ui10BoldFont, nullptr, nullptr, &uiSymbols10Font);
+EpdFontFamily ui10FontFamily = EpdFontFamily(&ui10RegularFont, &ui10BoldFont, nullptr, nullptr, &uiSymbols10Font)
+                                   .withScriptFallback(&cjkUi10Font);
 
 EpdFont ui12RegularFont(&inter_12_regular);
 EpdFont ui12BoldFont(&inter_12_bold);
-EpdFontFamily ui12FontFamily(&ui12RegularFont, &ui12BoldFont, nullptr, nullptr, &uiSymbols10Font);
+EpdFontFamily ui12FontFamily = EpdFontFamily(&ui12RegularFont, &ui12BoldFont, nullptr, nullptr, &uiSymbols10Font)
+                                   .withScriptFallback(&cjkUi12Font);
 
 const char* resetReasonName(const esp_reset_reason_t reason) {
   switch (reason) {

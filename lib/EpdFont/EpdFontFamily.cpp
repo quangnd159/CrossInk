@@ -212,6 +212,10 @@ EpdFontFamily::GlyphData EpdFontFamily::findGlyphData(const uint32_t cp, const S
       return {fallback->data, glyph};
     }
   }
+  // Built-in script glyphs come before a user font, which fills only what is still missing.
+  if (scriptFallback) {
+    if (const auto glyph = scriptFallback->findGlyph(cp)) return {scriptFallback->data, glyph};
+  }
   const auto extra = getFallbackFont(style);
   if (extra) {
     if (const auto glyph = extra->findGlyph(cp)) return {extra->data, glyph};
@@ -251,20 +255,22 @@ uint32_t EpdFontFamily::getFallbackCodepoint(const uint32_t cp, const Style styl
 bool EpdFontFamily::hasCodepoint(const uint32_t cp, const Style style) const {
   const auto extra = getFallbackFont(style);
   return getFont(style)->hasCodepoint(cp) || regular->hasCodepoint(cp) || (fallback && fallback->hasCodepoint(cp)) ||
-         (extra && extra->hasCodepoint(cp)) || (fallbackRegular && fallbackRegular->hasCodepoint(cp));
+         (extra && extra->hasCodepoint(cp)) || (fallbackRegular && fallbackRegular->hasCodepoint(cp)) ||
+         (scriptFallback && scriptFallback->hasCodepoint(cp));
 }
 
 int8_t EpdFontFamily::getKerning(const uint32_t leftCp, const uint32_t rightCp, const Style style) const {
   const auto primary = getFont(style);
-  if (!fallbackRegular) return primary->getKerning(leftCp, rightCp);
+  if (!fallbackRegular && !scriptFallback) return primary->getKerning(leftCp, rightCp);
   // Never apply a kerning pair across different faces in a mixed-script filename.
   const auto owner = [&](uint32_t cp) -> const EpdFont* {
     if (primary->hasCodepoint(cp)) return primary;
     if (regular->hasCodepoint(cp)) return regular;
     if (fallback && fallback->hasCodepoint(cp)) return fallback;
+    if (scriptFallback && scriptFallback->hasCodepoint(cp)) return scriptFallback;
     const auto extra = getFallbackFont(style);
     if (extra && extra->hasCodepoint(cp)) return extra;
-    return fallbackRegular->hasCodepoint(cp) ? fallbackRegular : nullptr;
+    return fallbackRegular && fallbackRegular->hasCodepoint(cp) ? fallbackRegular : nullptr;
   };
   const auto leftFont = owner(leftCp);
   return leftFont && leftFont == owner(rightCp) ? leftFont->getKerning(leftCp, rightCp) : 0;

@@ -45,3 +45,11 @@
 #include <builtinFonts/inter_12_bold.h>
 #include <builtinFonts/inter_12_regular.h>
 #include <builtinFonts/inter_8_regular.h>
+
+// Chinese glyphs for the UI fonts, attached as a per-glyph fallback. Builds
+// with bitmap reading fonts have no flash to spare, so they share 10 pt glyphs.
+#include <builtinFonts/cjk_ui_10.h>
+#if CROSSINK_SCALABLE_FONTS
+#include <builtinFonts/cjk_ui_12.h>
+#include <builtinFonts/cjk_ui_8.h>
+#endif

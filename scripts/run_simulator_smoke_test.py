@@ -326,6 +326,14 @@ def run_smoke(args: argparse.Namespace) -> int:
             )
             if args.dictionary and not args.clipping_selection:
                 env["CROSSINK_SIMULATOR_SMOKE_DICTIONARY"] = "1"
+        if args.cjk_dictionary:
+            # A Mandarin pack (tools/dict_convert output) and a CJK .cpfont family.
+            shutil.copytree(Path(args.cjk_dictionary).resolve(), temp_root / "fs_" / "dictionaries" / "zh")
+            env["CROSSINK_SIMULATOR_SMOKE_CJK_DICTIONARY"] = "1"
+            if args.cjk_font:
+                env["CROSSINK_SIMULATOR_SMOKE_CJK_FONT"] = args.cjk_font
+            if args.cjk_ui_font:
+                env["CROSSINK_SIMULATOR_SMOKE_CJK_UI_FONT"] = args.cjk_ui_font
         if args.font_dir and args.font_family:
             env["CROSSINK_SIMULATOR_SMOKE_ISOLATED_FONTS"] = "1"
         if args.font_family:
@@ -475,6 +483,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hyphenation-captures", help="Directory for hyphenation manager framebuffer captures (PGM)")
     parser.add_argument("--clipping-selection", action="store_true", help="Check floating text actions, selection handles, dismissal and saving")
     parser.add_argument("--dictionary", action="store_true", help="Check French contractions and exact dictionary matches")
+    parser.add_argument("--cjk-dictionary", metavar="PACK_DIR",
+                        help="Mandarin pack folder (vocab.idx/.dat/.spx); runs word segmentation and lookup on --book")
+    parser.add_argument("--cjk-font", help="SD font family (in --font-dir) used to render the Chinese book")
+    parser.add_argument("--cjk-ui-font", help="UI Font family (in --filename-font-dir) for Chinese outside the built-in set")
     parser.add_argument("--c3-font-sizes", "--bitmap-font-sizes", dest="c3_font_sizes", action="store_true", help="Check bitmap font sizes, inline layout, page cache, selection and SD reload")
     parser.add_argument("--font-size-book", action="store_true", help="Also render every page of --book with C3 fonts, checking its opening drop cap")
     parser.add_argument("--font-dir", help="Font fixtures copied into isolated /fonts")

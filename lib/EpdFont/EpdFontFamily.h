@@ -42,6 +42,12 @@ class EpdFontFamily {
     family.fallbackBold = boldFont;
     return family;
   }
+  // Built-in script glyphs (Chinese for the UI fonts), tried before a user filename font.
+  EpdFontFamily withScriptFallback(const EpdFont* font) const {
+    auto family = *this;
+    family.scriptFallback = font;
+    return family;
+  }
   // Optional ink bounds use font coordinates, increasing upward from the baseline.
   void getTextDimensions(const char* string, int* w, int* h, Style style = REGULAR, int* inkMinY = nullptr,
                          int* inkMaxY = nullptr) const;
@@ -68,6 +74,7 @@ class EpdFontFamily {
 
   const EpdFont* fallbackRegular = nullptr;
   const EpdFont* fallbackBold = nullptr;
+  const EpdFont* scriptFallback = nullptr;
   const EpdFont* getFallbackFont(Style style) const {
     return (style & BOLD) && fallbackBold ? fallbackBold : fallbackRegular;
   }

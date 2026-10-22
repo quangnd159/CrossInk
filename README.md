@@ -1,3 +1,6 @@
+> [!NOTE]
+> **This is a Mandarin learner's fork of [CrossInk](https://github.com/uxjulia/CrossInk)**, itself a fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader). It adds Chinese menus, built-in Chinese glyphs for file names and titles, and a Chinese dictionary with tap-to-look-up word segmentation, pinyin, HSK levels and an Anki-ready vocabulary log. See [Reading Chinese](docs/chinese.md). Everything below is CrossInk's own README. Firmware updates for this fork come from [its releases](https://github.com/quangnd159/CrossInk/releases), not from CrossInk's.
+
 > **This is a personal fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader)** with a focus on improved fonts and minimal reading stats.
 
 ### Supported Devices

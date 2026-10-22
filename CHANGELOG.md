@@ -1,3 +1,19 @@
+## [1.6.1.1] - 2026-10-22 (Mandarin learner fork)
+
+The first release of this fork, built on CrossInk 1.6.1 plus its unreleased changes up to `3d815cf3`. Firmware updates now come from this fork's releases. See [Reading Chinese](docs/chinese.md).
+
+### Added
+
+- Look up Chinese words in word select: the reader splits sentences into dictionary words, so the cursor moves one word at a time and Confirm looks up the whole word, showing pinyin, HSK level and meanings from a CC-CEDICT pack in `/dictionaries/zh`.
+- Collect each Chinese lookup in `/vocab/mandarin.tsv` with its pinyin, meaning, the sentence it came from (word in bold), the book and HSK level, ready to import into Anki.
+- Show Chinese file names, folder names and book titles without any setup: the menu fonts have the ~3,650 most common simplified characters built in, including every HSK 3.0 character.
+- Switch the menus to Simplified Chinese (简体中文) by installing `chinese-simplified.yaml`.
+- Fill in rare and traditional characters in menus on S3 readers with a Noto Sans SC UI Font made by `lib/EpdFont/scripts/make-cjk-ui-ttf.py`.
+
+### Fixed
+
+- Half-size and small-caps text drew fallback glyphs, such as UI Font characters, from the wrong font's bitmap.
+
 ## [Unreleased]
 
 ### Added

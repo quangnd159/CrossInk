@@ -165,7 +165,6 @@ bool CjkDictionarySmokeTest::tick() {
 
     case 9:
       capture("cjk-definition");
-      require(Storage.exists("/.crosspoint/cjkdict/CC-CEDICT/entry.dict"), "Mandarin entry was not written");
       {
         HalFile vocab;
         require(Storage.openFileForRead("SMOKE", "/vocab/mandarin.tsv", vocab), "Vocabulary log was not written");

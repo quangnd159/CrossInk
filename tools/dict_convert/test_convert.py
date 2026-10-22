@@ -223,5 +223,23 @@ class ThirdPass(unittest.TestCase):
         self.assertTrue(texts[1].startswith("【hào ㄏㄠˋ】"))
 
 
+class Vietnamese(unittest.TestCase):
+    def test_hanviet_reading_fills_gaps_and_skips_latin(self):
+        chars = {("學", "xue2"): "học", ("習", "*"): "tập", ("國", "guo2"): "quốc"}
+        twins = {"学": "學", "习": "習"}
+        self.assertEqual(conv.hanviet_reading("學習", "xue2 xi2", "học tập", chars, twins), "HỌC TẬP")
+        self.assertEqual(conv.hanviet_reading("學習", "xue2 xi2", "_ _", chars, twins), "HỌC TẬP")
+        self.assertEqual(conv.hanviet_reading("学习", "xue2 xi2", "", chars, twins), "HỌC TẬP")
+        self.assertEqual(conv.hanviet_reading("AA制", "A A zhi4", "_ _ Chế", chars, twins), "CHẾ")
+        # A Han character with no reading leaves the word without one rather than half of it.
+        self.assertEqual(conv.hanviet_reading("學瞓", "xue2 fan3", "_ _", chars, twins), "")
+
+    def test_classifier_and_common_nouns(self):
+        self.assertEqual(conv.prettify_cedict_gloss("LT:個|个[ge4]"), "lượng từ: 個/个 (gè)")
+        self.assertEqual(conv.prettify_cedict_gloss("lượng từ: 件[jian4]"), "lượng từ: 件 (jiàn)")
+        self.assertFalse(conv.is_proper_noun_pinyin("Han4 yu3", ["tiếng Hán"]))
+        self.assertTrue(conv.is_proper_noun_pinyin("Bei3 jing1", ["Bắc Kinh"]))
+
+
 if __name__ == "__main__":
     unittest.main()

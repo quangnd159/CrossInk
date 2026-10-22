@@ -725,6 +725,8 @@ _BRACKETED_PINYIN_RE = re.compile(r"\[([A-Za-z0-9:\u00fc\u00dc ,]+)\]")
 _CJK_CLASS = "[\u3400-\u9fff\uf900-\ufaff]"
 _SCRIPT_PAIR_BAR_RE = re.compile(rf"(?<={_CJK_CLASS})\||\|(?={_CJK_CLASS})")
 _CLASSIFIER_RE = re.compile(r"\bCL:(?=\S)")
+# CVDICT writes the classifier note as "LT:" or "lượng từ:"; spell it out the same way for both.
+_VI_CLASSIFIER_RE = re.compile(r"\b(?:LT|lượng từ):\s*")
 
 
 def prettify_cedict_gloss(gloss: str) -> str:
@@ -733,6 +735,7 @@ def prettify_cedict_gloss(gloss: str) -> str:
     "CL: 個/个 (gè)", "see 你好 (nǐ hǎo)"."""
     gloss = _BRACKETED_PINYIN_RE.sub(lambda m: " (" + pinyin_to_marks(m.group(1)) + ")", gloss)
     gloss = _SCRIPT_PAIR_BAR_RE.sub("/", gloss)
+    gloss = _VI_CLASSIFIER_RE.sub("lượng từ: ", gloss)
     return _CLASSIFIER_RE.sub("CL: ", gloss)
 
 
@@ -946,7 +949,9 @@ _COMMON_NOUN_GLOSS_RE = re.compile(
     r"religion|church|bible|god|party|army|navy|games|cup|era|calendar|zodiac|internet|christianity|"
     r"january|february|march|april|may|june|july|august|september|october|november|december|"
     r"american|british|chinese|japanese|korean|english|french|german|russian|spanish|italian|indian|"
-    r"asian|european|african|western)\b|ism\b|ist\b",
+    r"asian|european|african|western)\b|ism\b|ist\b|"
+    # The same in CVDICT's Vietnamese glosses.
+    r"\b(tiếng|người|dân tộc|ngày|tuần|tháng|tết|lễ|đạo|chủ nghĩa|đảng|quân đội|thế vận hội|kỷ nguyên|lịch)\b",
     re.IGNORECASE)
 
 
@@ -975,6 +980,51 @@ def load_canto_readings(path: str) -> dict:
     return out
 
 
+def load_hanviet_chars(path: str) -> dict:
+    """Per-character Sino-Vietnamese readings from hanviet-pinyin-wordlist's hanviet.csv
+    ("char,['reading', ...],pinyin", traditional characters, pinyin "*" for any reading).
+    Returns {(char, pinyin): reading} with the first reading listed."""
+    import ast
+    import csv
+    out = {}
+    with open(path, "r", encoding="utf-8", newline="") as f:
+        for row in csv.DictReader(f):
+            try:
+                readings = ast.literal_eval(row["hanviet"])
+            except (ValueError, SyntaxError):
+                continue
+            if readings:
+                out.setdefault((row["char"], row["pinyin"].strip().lower()), readings[0])
+    print(f"Hán-Việt readings {path}: {len(out):,} character readings")
+    return out
+
+
+def hanviet_reading(trad: str, pinyin: str, given: str, chars: dict, twins: dict) -> str:
+    """The word's Sino-Vietnamese reading in capitals (学习 -> HỌC TẬP), or "" when any of its
+    Han characters has none. given is the entry's own {…} field (Hán Thông: one token per
+    syllable, "_" where it has none); gaps are filled from chars by character and pinyin."""
+    syllables = pinyin.split()
+    tokens = given.split() if given else []
+    if len(tokens) != len(syllables):
+        tokens = ["_"] * len(syllables)
+    out = []
+    aligned = len(trad) == len(syllables)
+    for i, token in enumerate(tokens):
+        char = trad[i] if aligned else ""
+        if char and not _HAN_RE.match(char):
+            continue  # digits and Latin letters have no Hán-Việt
+        if token == "_":
+            if not char:
+                return ""
+            token = chars.get((char, syllables[i].lower())) or chars.get((char, "*")) or ""
+            if not token and char in twins:  # the list is traditional; a word may hold a simplified form
+                token = chars.get((twins[char], syllables[i].lower())) or chars.get((twins[char], "*")) or ""
+            if not token:
+                return ""
+        out.append(token)
+    return " ".join(out).upper()
+
+
 def split_cedict_glosses(body: str) -> list:
     """Split an entry's "/gloss/gloss/" body into glosses. A slash inside parentheses belongs to
     the gloss: CC-Canto writes "(phrase / adverb / noun) no, not." as one."""
@@ -997,12 +1047,13 @@ def split_cedict_glosses(body: str) -> list:
 
 def convert_cedict(path: str, zhuyin: bool = False, split_names: bool = False, levels: dict = None,
                    jyutping: dict = None, sentence_pairs: list = None, twins: dict = None,
-                   examples_script: str = "any") -> tuple:
+                   examples_script: str = "any", hanviet: dict = None) -> tuple:
     """Convert a raw CC-CEDICT (or CC-Canto) file to index records, one per traditional and
     simplified form. Returns (vocab_records, name_records); the second list is empty unless
     split_names routes proper nouns (capitalised pinyin) into the names slot. twins, when given,
     is filled with each form's other-script form, so apply_frequency can rank a traditional
-    record from a simplified word list and the reverse."""
+    record from a simplified word list and the reverse. hanviet, when given, reads the {…} field
+    as Hán Thông's Sino-Vietnamese reading instead of jyutping, filling gaps from that table."""
     print(f"Loading {path}...")
     levels = levels or {}
     jyutping = jyutping or {}
@@ -1019,8 +1070,12 @@ def convert_cedict(path: str, zhuyin: bool = False, split_names: bool = False, l
                 skipped += 1
                 continue
             trad, simp, pinyin, canto, body = m.groups()
+            glosses = split_cedict_glosses(body)
+            if not any(glosses):
+                skipped += 1  # Hán Thông lists some CC-CEDICT headwords with no meaning yet
+                continue
             idx = len(parsed)
-            parsed.append((trad, simp, pinyin, canto, split_cedict_glosses(body)))
+            parsed.append((trad, simp, pinyin, canto, glosses))
             # Examples go to the everyday entry of a form: 周 the week over the surname, and among
             # lowercase readings the one with more senses (東西 "thing" over "east and west").
             glosses = parsed[idx][4]
@@ -1047,12 +1102,24 @@ def convert_cedict(path: str, zhuyin: bool = False, split_names: bool = False, l
         sentence_pairs = [pair for pair in sentence_pairs if not any(ch in foreign for ch in pair[0])]
         print(f"Example sentences: {before - len(sentence_pairs):,} in the other script dropped, {len(sentence_pairs):,} kept")
     examples = attach_examples(sentence_pairs or [], forms, len(parsed)) if sentence_pairs else None
+    if hanviet is not None:
+        # Simplified -> traditional for single characters, so a word's simplified-only character
+        # can be looked up in the traditional Hán-Việt table.
+        charTwins = {}
+        for t, sm, *_ in parsed:
+            if len(t) == len(sm):
+                for a, b in zip(sm, t):
+                    if a != b:
+                        charTwins.setdefault(a, b)
 
     records = []
     names = []
     for idx, (trad, simp, pinyin, canto, glosses) in enumerate(parsed):
         level = levels.get(simp) or levels.get(trad) or ""
-        reading_canto = canto or jyutping.get((trad, simp, pinyin), "")
+        if hanviet is not None:
+            reading_canto = hanviet_reading(trad, pinyin, canto or "", hanviet, charTwins)
+        else:
+            reading_canto = canto or jyutping.get((trad, simp, pinyin), "")
         definition = format_definition_cedict(trad, simp, pinyin, glosses, zhuyin, reading_canto, level,
                                               examples[idx] if examples else None)
         def_bytes = definition.encode("utf-8")
@@ -1326,6 +1393,20 @@ def main():
         "CC-CEDICT entry it covers (CC-Canto's own .u8 as --input carries jyutping already).",
     )
     parser.add_argument(
+        "--names-title",
+        default="CC-CEDICT names",
+        help="Footer name for the --split-names dictionary (default: CC-CEDICT names).",
+    )
+    parser.add_argument(
+        "--hanviet",
+        nargs="?",
+        const="",
+        metavar="HANVIET_CSV",
+        help="Read the {…} field of a CVDICT/Hán Thông input as the Sino-Vietnamese reading and "
+        "show it after the pinyin. An optional hanviet-pinyin-wordlist hanviet.csv fills the "
+        "characters the field leaves out.",
+    )
+    parser.add_argument(
         "--examples",
         help="Tatoeba sentence pairs export (Chinese to English) or a sentence<TAB>translation "
         "file: each CC-CEDICT entry of two or more characters gets up to two short example "
@@ -1364,6 +1445,7 @@ def main():
 
     levels = load_levels(args.levels, args.level_name) if args.levels else {}
     jyutping = load_canto_readings(args.jyutping) if args.jyutping else {}
+    hanviet = None if args.hanviet is None else (load_hanviet_chars(args.hanviet) if args.hanviet else {})
     sentence_pairs = load_sentence_pairs(args.examples, args.examples_script) if args.examples else None
     records = []
     name_records = []
@@ -1382,7 +1464,7 @@ def main():
         elif fmt == "cedict":
             part, names = convert_cedict(path, zhuyin=args.zhuyin, split_names=args.split_names, levels=levels,
                                          jyutping=jyutping, sentence_pairs=sentence_pairs, twins=twins,
-                                         examples_script=args.examples_script)
+                                         examples_script=args.examples_script, hanviet=hanviet)
             name_records.extend(names)
             bilingual_headwords.update(r[0] for r in part)
             if "canto" in os.path.basename(path).lower():
@@ -1415,7 +1497,7 @@ def main():
         if args.name != "vocab":
             print("Note: --split-names only applies when writing the vocab slot; names kept in the output.")
         else:
-            write_binary(name_records, args.output_dir, "names", "CC-CEDICT names")  # only convert_cedict splits names
+            write_binary(name_records, args.output_dir, "names", args.names_title)  # only convert_cedict splits names
     if chinese:
         print(f"Install under /dictionaries/{args.lang}/ on the SD card (or /.dictionaries/{args.lang}/).")
 

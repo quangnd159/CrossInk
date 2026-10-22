@@ -49,14 +49,16 @@ bool startsWith(const char* text, const size_t len, const char* prefix) {
 }
 
 // Folder-safe pack title for the scratch path: the definition view prints the
-// folder name in its footer, and FAT rejects a handful of punctuation marks.
+// folder name in its footer, and FAT rejects a handful of ASCII punctuation
+// marks. UTF-8 bytes pass through, since long names are UTF-8 (Trung-Việt).
 std::string scratchFolderName() {
   const char* title = DictIndex::slotTitle(DictIndex::DICT_JMDICT);
   std::string name;
   for (const char* p = title; p && *p; p++) {
     const char c = *p;
     const bool safe = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == ' ' ||
-                      c == '-' || c == '_' || c == '.' || c == '(' || c == ')' || c == '+';
+                      c == '-' || c == '_' || c == '.' || c == '(' || c == ')' || c == '+' ||
+                      (static_cast<unsigned char>(c) & 0x80);
     if (safe) name += c;
   }
   while (!name.empty() && (name.back() == ' ' || name.back() == '.')) name.pop_back();

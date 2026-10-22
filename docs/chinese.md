@@ -100,6 +100,33 @@ moves proper nouns into a separate names dictionary so they do not crowd out
 ordinary words. The pack is about 18 MB, and every entry is indexed under both
 its simplified and traditional form, so it also works for traditional books.
 
+### Chinese–Vietnamese (Trung-Việt)
+
+For Vietnamese speakers there is a pack with Vietnamese meanings and the
+Sino-Vietnamese (Hán-Việt) reading of every word, shown after the pinyin:
+学习 【xué xí · HỌC TẬP】 học; tìm hiểu. The vocabulary log's Reading column
+carries the Hán-Việt too. It is built from:
+
+- [Hán Thông](https://github.com/DucThanhNguyen/han-thong) `data/dict.u8`
+  (CC BY-SA 4.0): [CVDICT](https://github.com/teefan/CVDICT) by Phong Phan, about
+  123,000 CC-CEDICT entries translated into Vietnamese and then reviewed, with Hán Thông's
+  corrections and per-word Hán-Việt. CVDICT's meanings started as machine
+  translations, so rare words can read awkwardly.
+- [hanviet-pinyin-wordlist](https://github.com/brianhuster/hanviet-pinyin-wordlist)
+  `hanviet.csv` (MIT): Hán-Việt for each character and pinyin, filling the words
+  Hán Thông leaves without one.
+- jieba and hsk30, as above.
+
+```sh
+python3 tools/dict_convert/convert_jmdict.py --lang zh \
+  --input dict.u8 --hanviet hanviet.csv --frequency dict.txt --split-names \
+  --levels hsk30.csv --level-name HSK --title "Trung-Việt" --names-title "Tên riêng" \
+  --output-dir out/zh
+python3 scripts/gen_dict_spx.py out/zh
+```
+
+It goes in the same `/dictionaries/zh/` folder, in place of the English pack.
+
 The pack format and converter come from
 [Matcha Reader](https://github.com/eszter007/matcha-reader) (MIT), so packs built
 for Matcha Reader work here too.

@@ -198,6 +198,7 @@ bool DictionaryWordSelectActivity::buildWorkingSet(const bool consumeInitialConf
   }
   navigator.loadView(workingSet_.words.get(), workingSet_.wordCount, workingSet_.rows.get(), workingSet_.rowCount,
                      workingSet_.textPool.get(), consumeInitialConfirm);
+  attachCjkSegmentation();
 #if CROSSINK_APP_CAP_TOUCH
   navigator.setTouchDragCursorVisible(false);
   bool initialTouchHit = false;
@@ -242,6 +243,7 @@ void DictionaryWordSelectActivity::onExit() {
   controller.onExit();
   navigator.releaseWorkingSet();
   workingSet_.clear();
+  segmenter_.releaseScratch();
   Dictionary::clearLookupDictPathOverride();
   mappedInput.setReaderTouchscreenOverride(false);
   const auto& sdFonts = renderer.getSdCardFonts();
@@ -250,16 +252,46 @@ void DictionaryWordSelectActivity::onExit() {
   Activity::onExit();
 }
 
+void DictionaryWordSelectActivity::attachCjkSegmentation() {
+  const size_t count = workingSet_.wordCount;
+  if (count == 0 || !CjkDictionary::available()) return;
+  bool hasHan = false;
+  for (size_t i = 0; i < count && !hasHan; i++) hasHan = CjkSegmenter::isRunCell(navigator, static_cast<int>(i));
+  if (!hasHan) return;
+  workingSet_.spans = makeUniqueNoThrow<uint8_t[]>(count);
+  if (!workingSet_.spans || !segmenter_.ensureScratch()) {
+    LOG_ERR("DICT", "OOM: CJK segmentation disabled for this page");
+    workingSet_.spans.reset();
+    return;
+  }
+  // 1-byte spans: one word per token until a run is segmented on demand.
+  for (size_t i = 0; i < count; i++) {
+    workingSet_.spans[i] =
+        CjkSegmenter::isRunCell(navigator, static_cast<int>(i)) ? WordSelectNavigator::kSpanUnknown : 1;
+  }
+  navigator.setSegmentation(workingSet_.spans.get(), &DictionaryWordSelectActivity::ensureSegmentedThunk, this);
+  navigator.snapToSegmentStart();
+}
+
+void DictionaryWordSelectActivity::ensureSegmentedThunk(void* ctx, const int flatIdx) {
+  auto* self = static_cast<DictionaryWordSelectActivity*>(ctx);
+  self->segmenter_.segmentRunAt(self->navigator, self->workingSet_.spans.get(), flatIdx);
+}
+
 void DictionaryWordSelectActivity::prewarmHighlightGlyphs(int currIdx) {
-  const auto* w = navigator.getWordAt(currIdx);
-  if (!w) return;
   auto* fcm = renderer.getFontCacheManager();
   if (!fcm) return;
-  uint8_t styleMask = styleToBitMask(w->style);
-  if (w->focusBoundary > 0) {
-    styleMask |= styleToBitMask(static_cast<EpdFontFamily::Style>(w->style | EpdFontFamily::BOLD));
+  // A segmented CJK word highlights every character token it spans.
+  const int lastIdx = navigator.segmentEndOf(currIdx);
+  for (int idx = currIdx; idx <= lastIdx; idx++) {
+    const auto* w = navigator.getWordAt(idx);
+    if (!w) return;
+    uint8_t styleMask = styleToBitMask(w->style);
+    if (w->focusBoundary > 0) {
+      styleMask |= styleToBitMask(static_cast<EpdFontFamily::Style>(w->style | EpdFontFamily::BOLD));
+    }
+    fcm->prewarmCache(SETTINGS.getReaderFontId(), navigator.getDisplay(*w), styleMask);
   }
-  fcm->prewarmCache(SETTINGS.getReaderFontId(), navigator.getDisplay(*w), styleMask);
 }
 
 void DictionaryWordSelectActivity::prebuildAdvanceTable() {
@@ -577,10 +609,33 @@ bool DictionaryWordSelectActivity::extractWords() {
   const char* const textPool = workingSet_.textPool.get();
 
   uint16_t pageWordOrdinal = 0;
+  // True when the previous line's final token was appended as a selectable
+  // word, so a wrapped CJK run continues onto this line without a break.
+  bool previousLineEndedSelectable = false;
+  // Extent and font of the previous line. A line only continues it when it is
+  // in the same font, not indented further, and the previous line reached
+  // (within about one em) as far right: headings, short paragraph tails and
+  // indented paragraph starts are block breaks, not wraps.
+  int previousLineLeft = 0;
+  int previousLineRight = 0;
+  int previousLineFontId = -1;
   return forEachPageTextLine(*page, [&](const PageTextLine& line) {
     const auto* block = line.block;
     if (!block) return true;
     const int lineFontId = block->resolvedFontId(renderer, SETTINGS.getReaderFontId());
+    int lineLeft = 0;
+    int lineRight = 0;
+    if (block->wordCount() > 0) {
+      const uint16_t last = block->wordCount() - 1;
+      lineLeft = line.xPos + block->wordXpos(0);
+      lineRight = line.xPos + block->wordXpos(last) +
+                  renderer.getTextAdvanceX(block->wordFontId(renderer, lineFontId, last), block->visibleWordText(last),
+                                           block->wordStyle(last), 0,
+                                           CrossPointSettings::characterSpacingLevel(SETTINGS.characterSpacing));
+    }
+    const int em = std::max(line.lineHeight > 0 ? line.lineHeight : renderer.getLineHeight(lineFontId), 1);
+    const bool wrapsPreviousLine = previousLineEndedSelectable && lineFontId == previousLineFontId &&
+                                   lineLeft <= previousLineLeft + em / 2 && previousLineRight + em >= lineRight;
     const int16_t naturalSpaceWidth = static_cast<int16_t>(
         renderer.getTextAdvanceX(lineFontId, " ", EpdFontFamily::REGULAR, 0,
                                  CrossPointSettings::characterSpacingLevel(SETTINGS.characterSpacing)));
@@ -691,6 +746,7 @@ bool DictionaryWordSelectActivity::extractWords() {
         word.setLineHeight(line.lineHeight);
         word.isRtl = wordIsRtl;
         word.joinWithoutSpaceBefore = joinWithoutSpaceBefore;
+        word.continuesLineBefore = wordIndex == 0 && wrapsPreviousLine && !line.isTableText;
         word.isTableText = line.isTableText;
         word.focusBoundary = focusBoundary;
         word.focusSuffixX = focusSuffixX;
@@ -758,6 +814,11 @@ bool DictionaryWordSelectActivity::extractWords() {
       if (!partSucceeded) return false;
       lastSelectableWordIndex = -2;
     }
+    previousLineEndedSelectable =
+        sourceWordCount > 0 && lastSelectableWordIndex == static_cast<int>(sourceWordCount) - 1;
+    previousLineLeft = lineLeft;
+    previousLineRight = lineRight;
+    previousLineFontId = lineFontId;
     return true;
   });
 }

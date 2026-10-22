@@ -60,12 +60,17 @@ class WordSelectNavigator {
     // not participate in the body-text hyphen continuation heuristic.
     uint8_t isTableText : 1;
     uint8_t compoundSeparatorBefore : 2;
+    // First token of a line that directly continues the previous line's last
+    // token (no punctuation or space between). Lets unspaced CJK runs and
+    // phrases join across a line wrap.
+    uint8_t continuesLineBefore : 1;
     uint8_t focusBoundary = 0;
     uint16_t focusSuffixX = 0;
     int heightOr(const int fallback) const { return lineHeight ? lineHeight : fallback; }
     void setLineHeight(const uint16_t height) { lineHeight = height; }
 
-    WordInfo() : isRtl(0), joinWithoutSpaceBefore(0), isTableText(0), compoundSeparatorBefore(0) {}
+    WordInfo()
+        : isRtl(0), joinWithoutSpaceBefore(0), isTableText(0), compoundSeparatorBefore(0), continuesLineBefore(0) {}
   };
 
   struct Row {
@@ -274,6 +279,35 @@ class WordSelectNavigator {
 
   void setHighlightSnapshotStorage(HighlightSnapshotStorage* storage) { snapshot_.setStorage(storage); }
 
+  // --- Word segmentation for unspaced scripts (Chinese) ---
+  //
+  // Unspaced CJK text reaches the navigator one character per word. With a
+  // segmentation table attached, the cursor moves and highlights by dictionary
+  // word instead: spans[i] is kSpanUnknown until segmented, 0 for a character
+  // inside a word that starts earlier, and N >= 1 for a word of N characters
+  // starting at i. `ensure` fills the table for the run containing an index; it
+  // may read the SD card, so the navigator calls it only from input handling,
+  // never while rendering. The table is owned by the caller and must cover
+  // every loaded word until clearSegmentation() or the next load.
+  static constexpr uint8_t kSpanUnknown = 0xFF;
+  using EnsureSegmentedFn = void (*)(void* ctx, int flatIdx);
+  void setSegmentation(uint8_t* spans, EnsureSegmentedFn ensure, void* ctx);
+  void clearSegmentation() {
+    spans_ = nullptr;
+    ensureSegmented_ = nullptr;
+    segmentCtx_ = nullptr;
+  }
+  bool hasSegmentation() const { return spans_ != nullptr; }
+  // Move the cursor to the start of the word containing it (segmenting first).
+  void snapToSegmentStart();
+  // First/last word index of the dictionary word containing idx. Read-only:
+  // an unsegmented index is its own one-word segment.
+  int segmentStartOf(int idx) const;
+  int segmentEndOf(int idx) const;
+  // True when word idx continues the previous word's text without a space:
+  // adjacent on one line, or a CJK character wrapped from the previous line.
+  bool joinsPreviousWithoutSpace(int idx) const;
+
   // Release the page-derived containers while a child definition activity is
   // active. Their capacity is intentionally returned to the heap; rebuilding
   // on Back is rare and substantially lowers the stacked modal peak.
@@ -342,4 +376,17 @@ class WordSelectNavigator {
   // Padded bounding rectangle for one word, matching renderHighlight's ±2 padding.
   // Returns Rect{0,0,0,0} when wordIndex is invalid.
   Rect boundsForWord(int wordIndex, int lineHeight) const;
+  // Union of boundsForWord over the segment starting at wordIndex when it sits
+  // on one row; Rect{} when the segment wraps rows (caller falls back).
+  Rect boundsForSegment(int wordIndex, int lineHeight) const;
+
+  uint8_t* spans_ = nullptr;
+  EnsureSegmentedFn ensureSegmented_ = nullptr;
+  void* segmentCtx_ = nullptr;
+  void ensureSegmentedAt(int idx) const {
+    if (spans_ && ensureSegmented_ && idx >= 0 && idx < static_cast<int>(words.size()) &&
+        spans_[idx] == kSpanUnknown) {
+      ensureSegmented_(segmentCtx_, idx);
+    }
+  }
 };

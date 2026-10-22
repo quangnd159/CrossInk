@@ -3,15 +3,18 @@
 #include <GfxRenderer.h>
 #include <HalDisplay.h>
 #include <I18n.h>
+#include <Utf8.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 
 #include "../activities/Activity.h"
 #include "../activities/reader/DictionarySuggestionsActivity.h"
 #include "CrossPointSettings.h"
+#include "CrossPointState.h"
 #include "DictionaryLookupWorker.h"
 #include "MappedInputManager.h"
 #include "Memory.h"
@@ -21,6 +24,7 @@
 #include "components/UIThemeTokens.h"
 #include "components/UiAppHelpers.h"
 #include "fontIds.h"
+#include "util/CjkDictionary.h"
 #include "util/Dictionary.h"
 
 DictionaryLookupController::DictionaryLookupController(GfxRenderer& renderer, MappedInputManager& mappedInput,
@@ -115,6 +119,9 @@ void DictionaryLookupController::setNotFound() {
 void DictionaryLookupController::onExit() {
   lookupCancelRequested = true;
   DictionaryLookupWorker::instance().waitForOwner(*this);
+  // The Mandarin pack's index caches (~30 KB) must not outlive the lookup UI:
+  // the reader needs that heap back for page layout.
+  CjkDictionary::releaseCaches();
 }
 
 void DictionaryLookupController::requestBack() {
@@ -486,9 +493,13 @@ bool DictionaryLookupController::handleMultiSelect(WordSelectNavigator& navigato
   const auto msAction = navigator.handleMultiSelectInput(mappedInput, msPhrase);
   if (msAction == WordSelectNavigator::MultiSelectAction::None) return false;
   switch (msAction) {
-    case WordSelectNavigator::MultiSelectAction::PhraseReady:
+    case WordSelectNavigator::MultiSelectAction::PhraseReady: {
+      int fromIdx = -1;
+      int toIdx = -1;
+      if (navigator.getLookupSelectionRange(fromIdx, toIdx)) captureVocabContext(navigator, fromIdx, toIdx);
       lookupOrPopup(msPhrase, navigator.getLookupSelectionWordCount());
       return true;
+    }
     case WordSelectNavigator::MultiSelectAction::ExitedMultiSelect:
     case WordSelectNavigator::MultiSelectAction::EnteredMultiSelect:
       owner.requestUpdate();
@@ -502,8 +513,88 @@ bool DictionaryLookupController::handleConfirmLookup(const WordSelectNavigator& 
   if (!mappedInput.wasReleased(MappedInputManager::Button::Confirm)) return false;
   const auto* sel = navigator.getSelected();
   if (!sel) return true;  // consumed input even if nothing selected
+  int fromIdx = -1;
+  int toIdx = -1;
+  const bool hasRange = navigator.getLookupSelectionRange(fromIdx, toIdx);
+  if (hasRange) captureVocabContext(navigator, fromIdx, toIdx);
+  // A segmented CJK word spans several single-character tokens.
+  if (hasRange && fromIdx != toIdx) {
+    lookupOrPopup(navigator.buildPhrase(fromIdx, toIdx), 1);
+    return true;
+  }
   lookupOrPopup(navigator.getLookup(*sel), navigator.getLookupSelectionWordCount());
   return true;
+}
+
+namespace {
+// Sentence-final punctuation, CJK and Latin.
+bool endsSentence(const char* token) {
+  static constexpr const char* kEnders[] = {"\xE3\x80\x82", "\xEF\xBC\x81", "\xEF\xBC\x9F", "\xEF\xBC\x9B",
+                                            "\xE2\x80\xA6", ".", "!", "?"};  // 。！？；… . ! ?
+  for (const char* ender : kEnders) {
+    if (std::strstr(token, ender)) return true;
+  }
+  return false;
+}
+
+uint32_t lastCodepoint(const char* text) {
+  size_t start = std::strlen(text);
+  if (start == 0) return 0;
+  while (--start > 0 && (static_cast<unsigned char>(text[start]) & 0xC0) == 0x80) {
+  }
+  const auto* ptr = reinterpret_cast<const unsigned char*>(text + start);
+  return utf8NextCodepoint(&ptr);
+}
+
+// A heading or paragraph ends without punctuation when the next Han line does
+// not continue it: Han text on both sides of a row change the layout did not join.
+bool blockBreakBefore(const WordSelectNavigator& navigator, const int idx) {
+  const auto* cur = navigator.getWordAt(idx);
+  const auto* prev = navigator.getWordAt(idx - 1);
+  if (!cur || !prev || cur->row == prev->row || navigator.joinsPreviousWithoutSpace(idx)) return false;
+  const auto* curPtr = reinterpret_cast<const unsigned char*>(navigator.getLookup(*cur));
+  return utf8IsHan(lastCodepoint(navigator.getLookup(*prev))) && utf8IsHan(utf8NextCodepoint(&curPtr));
+}
+}  // namespace
+
+void DictionaryLookupController::captureVocabContext(const WordSelectNavigator& navigator, const int fromIdx,
+                                                     const int toIdx) {
+  // The sentence is clipped to the page and to kReach tokens on each side.
+  static constexpr int kReach = 60;
+  vocabContext_.sentenceHtml.clear();
+  int start = fromIdx;
+  while (start > 0 && fromIdx - start < kReach) {
+    const auto* prev = navigator.getWordAt(start - 1);
+    if (!prev || endsSentence(navigator.getLookup(*prev)) || blockBreakBefore(navigator, start)) break;
+    start--;
+  }
+  int end = toIdx;
+  while (end - toIdx < kReach) {
+    const auto* cur = navigator.getWordAt(end);
+    if (!cur || endsSentence(navigator.getLookup(*cur)) || !navigator.getWordAt(end + 1) ||
+        blockBreakBefore(navigator, end + 1)) {
+      break;
+    }
+    end++;
+  }
+  if (start < fromIdx) {
+    vocabContext_.sentenceHtml = navigator.buildPhrase(start, fromIdx - 1);
+    if (!navigator.joinsPreviousWithoutSpace(fromIdx)) vocabContext_.sentenceHtml += ' ';
+  }
+  vocabContext_.sentenceHtml += "<b>";
+  vocabContext_.sentenceHtml += navigator.buildPhrase(fromIdx, toIdx);
+  vocabContext_.sentenceHtml += "</b>";
+  if (end > toIdx) {
+    if (!navigator.joinsPreviousWithoutSpace(toIdx + 1)) vocabContext_.sentenceHtml += ' ';
+    vocabContext_.sentenceHtml += navigator.buildPhrase(toIdx + 1, end);
+  }
+
+  // Book title: the open file's name without folder or extension.
+  const std::string& path = APP_STATE.openEpubPath;
+  const size_t slash = path.rfind('/');
+  vocabContext_.book = path.substr(slash == std::string::npos ? 0 : slash + 1);
+  const size_t dot = vocabContext_.book.rfind('.');
+  if (dot != std::string::npos && dot > 0) vocabContext_.book.resize(dot);
 }
 
 void DictionaryLookupController::lookupOrPopup(const std::string& rawWord, const size_t highlightedWordCount) {
@@ -595,6 +686,19 @@ void DictionaryLookupController::runLookup() {
     lookupDone = true;
     logDictionaryLookupTaskEnd();
     return;
+  }
+  // Han text goes to the segmentation-ready Mandarin pack first; a miss there
+  // still falls through to the configured StarDict dictionary.
+  if (CjkDictionary::wantsWord(lookupWord) && CjkDictionary::available()) {
+    foundLocation = CjkDictionary::locate(lookupWord, recordHistory_ ? &vocabContext_ : nullptr);
+    vocabContext_.sentenceHtml.clear();
+    if (foundLocation.found || lookupCancelRequested) {
+      lookupReadError = foundLocation.readError;
+      lookupCancelled = lookupCancelRequested.load();
+      lookupDone = true;
+      logDictionaryLookupTaskEnd();
+      return;
+    }
   }
   foundLocation = Dictionary::locateWithStemVariants(lookupWord, &lookupMatchedStem, cbs, cachePath.c_str());
   lookupReadError = foundLocation.readError;

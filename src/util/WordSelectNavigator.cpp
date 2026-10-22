@@ -22,6 +22,7 @@ void WordSelectNavigator::load(std::vector<WordInfo> w, std::vector<Row> r, std:
   words.reset(ownedWords.data(), ownedWords.size());
   rows.reset(ownedRows.data(), ownedRows.size());
   textPool = ownedTextPool.data();
+  clearSegmentation();
   currentRow = static_cast<int>(rows.size()) / 2;
   currentWordInRow =
       (!rows.empty() && rows[currentRow].wordCount > 0) ? static_cast<int>(rows[currentRow].wordCount) / 2 : 0;
@@ -38,6 +39,7 @@ void WordSelectNavigator::loadView(WordInfo* w, const size_t wordCount, Row* r, 
   words.reset(w, wordCount);
   rows.reset(r, rowCount);
   textPool = pool;
+  clearSegmentation();
   currentRow = static_cast<int>(rows.size()) / 2;
   currentWordInRow =
       (!rows.empty() && rows[currentRow].wordCount > 0) ? static_cast<int>(rows[currentRow].wordCount) / 2 : 0;
@@ -82,6 +84,7 @@ void WordSelectNavigator::reset() {
   wordRepeatActive = false;
   pendingSnapIdx = -1;
   snapshot_.clear();
+  clearSegmentation();
 }
 
 const WordSelectNavigator::WordInfo* WordSelectNavigator::getSelected() const {
@@ -110,7 +113,7 @@ bool WordSelectNavigator::getLookupSelectionRange(int& fromIdx, int& toIdx) cons
     return true;
   }
   fromIdx = currentIdx;
-  toIdx = currentIdx;
+  toIdx = segmentEndOf(currentIdx);
   return true;
 }
 
@@ -152,7 +155,7 @@ std::string WordSelectNavigator::buildPhrase(int fromIdx, int toIdx) const {
       const auto separator = static_cast<DictionaryWordPartSeparator>(w->compoundSeparatorBefore);
       if (separator != DictionaryWordPartSeparator::None) {
         phrase += dictionaryWordPartSeparatorText(separator);
-      } else if (!w->joinWithoutSpaceBefore) {
+      } else if (!joinsPreviousWithoutSpace(i)) {
         phrase += ' ';
       }
     }
@@ -163,6 +166,54 @@ std::string WordSelectNavigator::buildPhrase(int fromIdx, int toIdx) const {
     if (w->continuationIndex >= 0) skipIdx = w->continuationIndex;
   }
   return phrase;
+}
+
+void WordSelectNavigator::setSegmentation(uint8_t* spans, const EnsureSegmentedFn ensure, void* ctx) {
+  spans_ = spans;
+  ensureSegmented_ = ensure;
+  segmentCtx_ = ctx;
+}
+
+int WordSelectNavigator::segmentStartOf(const int idx) const {
+  if (!spans_ || idx < 0 || idx >= static_cast<int>(words.size())) return idx;
+  int start = idx;
+  while (start > 0 && spans_[start] == 0) start--;
+  return start;
+}
+
+int WordSelectNavigator::segmentEndOf(const int idx) const {
+  if (!spans_ || idx < 0 || idx >= static_cast<int>(words.size())) return idx;
+  const int start = segmentStartOf(idx);
+  const uint8_t span = spans_[start];
+  if (span == 0 || span == kSpanUnknown) return idx;
+  return std::min(start + static_cast<int>(span) - 1, static_cast<int>(words.size()) - 1);
+}
+
+void WordSelectNavigator::snapToSegmentStart() {
+  const int idx = getCurrentFlatIndex();
+  if (!spans_ || idx < 0) return;
+  ensureSegmentedAt(idx);
+  const int start = segmentStartOf(idx);
+  if (start != idx) selectIndex(start);
+}
+
+bool WordSelectNavigator::joinsPreviousWithoutSpace(const int idx) const {
+  const auto* w = getWordAt(idx);
+  const auto* prev = getWordAt(idx - 1);
+  if (!w || !prev) return false;
+  if (w->joinWithoutSpaceBefore) return true;
+  if (!w->continuesLineBefore) return false;
+  // A line wrap is a space in spaced scripts; only unspaced CJK joins across it.
+  const char* prevText = getLookup(*prev);
+  const size_t prevLen = std::strlen(prevText);
+  size_t lastStart = prevLen;
+  while (lastStart > 0 && (static_cast<unsigned char>(prevText[lastStart - 1]) & 0xC0) == 0x80) lastStart--;
+  if (lastStart > 0) lastStart--;
+  const auto* prevPtr = reinterpret_cast<const unsigned char*>(prevText + lastStart);
+  const auto* curPtr = reinterpret_cast<const unsigned char*>(getLookup(*w));
+  const uint32_t prevCp = utf8NextCodepoint(&prevPtr);
+  const uint32_t curCp = utf8NextCodepoint(&curPtr);
+  return utf8IsCjkBreakable(prevCp) && utf8IsCjkBreakable(curCp) && !utf8IsHangul(prevCp) && !utf8IsHangul(curCp);
 }
 
 int WordSelectNavigator::findClosestWord(int targetRow) const {
@@ -339,6 +390,17 @@ bool WordSelectNavigator::handleNavigation(const MappedInputManager& input, cons
       // findClosestWord landed on. Both halves highlight regardless.
     }
 
+    // Segmented CJK: Next jumps past the whole word under the cursor; every
+    // other move lands on the start of the word it reaches.
+    if (spans_) {
+      if (wordNextPressed && prevFlatIdx >= 0) {
+        int next = segmentEndOf(prevFlatIdx) + 1;
+        if (next >= static_cast<int>(words.size())) next = 0;
+        selectIndex(next);
+      }
+      snapToSegmentStart();
+    }
+
     // Symmetric with the wordNext skip: if we came directly from the second
     // half and wrapped into its first half, skip backward past the first half
     // so the pair is treated as a single navigation unit in both directions.
@@ -389,6 +451,10 @@ bool WordSelectNavigator::selectWordAtPoint(const int x, const int y, const int 
 
   if (bestIdx < 0) return false;
   if (hit) *hit = true;
+  if (spans_ && !inMultiSelectMode) {
+    ensureSegmentedAt(bestIdx);
+    bestIdx = segmentStartOf(bestIdx);
+  }
   return selectIndex(bestIdx);
 }
 
@@ -495,9 +561,12 @@ bool WordSelectNavigator::beginTouchMultiSelect() {
 
 std::string WordSelectNavigator::finishTouchMultiSelect() {
   if (!inMultiSelectMode) return {};
-  const std::string phrase = buildPhrase(anchorFlatIndex, getCurrentFlatIndex());
+  int endIdx = getCurrentFlatIndex();
+  // A hold without a drag on a segmented CJK word selects the whole word.
+  if (endIdx == anchorFlatIndex) endIdx = segmentEndOf(anchorFlatIndex);
+  const std::string phrase = buildPhrase(anchorFlatIndex, endIdx);
   completedSelectionStart = anchorFlatIndex;
-  completedSelectionEnd = getCurrentFlatIndex();
+  completedSelectionEnd = endIdx;
   inMultiSelectMode = false;
   return phrase;
 }
@@ -543,9 +612,10 @@ void WordSelectNavigator::renderHighlight(const GfxRenderer& renderer, int lineH
   } else {
     const int selIdx = getCurrentFlatIndex();
     if (selIdx < 0) return;
-    drawSingleHighlight(renderer, lineHeight, selIdx, foregroundBlack);
+    const int selEnd = segmentEndOf(selIdx);
+    for (int i = selIdx; i <= selEnd; i++) drawSingleHighlight(renderer, lineHeight, i, foregroundBlack);
     drawContinuationsIfOutside(renderer, lineHeight, getWordAt(selIdx), selIdx, selIdx, foregroundBlack);
-    drawTouchDragCursor(renderer, lineHeight, selIdx, foregroundBlack);
+    drawTouchDragCursor(renderer, lineHeight, selEnd, foregroundBlack);
   }
 }
 
@@ -610,11 +680,29 @@ WordSelectNavigator::Rect WordSelectNavigator::boundsForWord(int wordIndex, int 
               static_cast<int>(w->width) + 4 + cursorWidth, w->heightOr(lineHeight) + 4};
 }
 
+WordSelectNavigator::Rect WordSelectNavigator::boundsForSegment(const int wordIndex, const int lineHeight) const {
+  Rect bounds = boundsForWord(wordIndex, lineHeight);
+  const int end = segmentEndOf(wordIndex);
+  if (end == wordIndex || bounds.width == 0) return bounds;
+  const auto* first = getWordAt(wordIndex);
+  for (int i = wordIndex + 1; i <= end; i++) {
+    const auto* w = getWordAt(i);
+    if (!w || w->row != first->row) return Rect{};
+    const Rect r = boundsForWord(i, lineHeight);
+    const int x0 = std::min(bounds.x, r.x);
+    const int y0 = std::min(bounds.y, r.y);
+    const int x1 = std::max(bounds.x + bounds.width, r.x + r.width);
+    const int y1 = std::max(bounds.y + bounds.height, r.y + r.height);
+    bounds = Rect{x0, y0, x1 - x0, y1 - y0};
+  }
+  return bounds;
+}
+
 WordSelectNavigator::Rect WordSelectNavigator::computeDirtyRect(int prevWordIdx, int currWordIdx,
                                                                 int lineHeight) const {
-  Rect curr = boundsForWord(currWordIdx, lineHeight);
+  Rect curr = boundsForSegment(currWordIdx, lineHeight);
   if (prevWordIdx < 0) return curr;
-  Rect prev = boundsForWord(prevWordIdx, lineHeight);
+  Rect prev = boundsForSegment(prevWordIdx, lineHeight);
   if (prev.width == 0 || prev.height == 0) return curr;
   if (curr.width == 0 || curr.height == 0) return prev;
   const int x0 = std::min(prev.x, curr.x);
@@ -649,7 +737,8 @@ std::optional<WordSelectNavigator::Rect> WordSelectNavigator::renderHighlightDif
 
   // Step 2: snapshot pixels under the new highlight, clamping coordinates so we
   // never pass negative values into the renderer's uint16_t API.
-  const Rect newRect = boundsForWord(currWordIdx, lineHeight);
+  const Rect newRect = boundsForSegment(currWordIdx, lineHeight);
+  if (newRect.width == 0 || newRect.height == 0) return std::nullopt;  // segment wraps rows
   const uint16_t snapX = static_cast<uint16_t>(std::max(newRect.x, 0));
   const uint16_t snapY = static_cast<uint16_t>(std::max(newRect.y, 0));
   const uint16_t snapW = static_cast<uint16_t>(std::max(newRect.width, 0));
@@ -660,8 +749,9 @@ std::optional<WordSelectNavigator::Rect> WordSelectNavigator::renderHighlightDif
   }
 
   // Step 3: draw the new highlight on top of the captured pixels.
-  drawSingleHighlight(renderer, lineHeight, currWordIdx, foregroundBlack);
-  drawTouchDragCursor(renderer, lineHeight, currWordIdx, foregroundBlack);
+  const int currEnd = segmentEndOf(currWordIdx);
+  for (int i = currWordIdx; i <= currEnd; i++) drawSingleHighlight(renderer, lineHeight, i, foregroundBlack);
+  drawTouchDragCursor(renderer, lineHeight, currEnd, foregroundBlack);
 
   // Step 4: caller pushes the union region.
   return computeDirtyRect(prevWordIdx, currWordIdx, lineHeight);

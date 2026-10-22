@@ -1,5 +1,7 @@
 #include "Dictionary.h"
 
+#include "CjkDictionary.h"
+
 #include <HalStorage.h>
 #include <Logging.h>
 #include <Memory.h>
@@ -205,6 +207,8 @@ bool Dictionary::hasGlobalDictPathFile() {
 // ---------------------------------------------------------------------------
 
 bool Dictionary::exists(const char* cachePath) {
+  // A Mandarin pack alone is enough to offer lookup; Han words go to it first.
+  if (CjkDictionary::available()) return true;
   std::string folderPath = readDictPath(cachePath);
   if (folderPath.empty()) return false;
   DictPaths dp(folderPath);

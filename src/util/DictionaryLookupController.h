@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string>
 
+#include "CjkDictionary.h"
 #include "Dictionary.h"
 #include "LookupHistory.h"
 #include "WordSelectNavigator.h"
@@ -170,6 +171,9 @@ class DictionaryLookupController {
   std::string foundWord;
   DictLocation foundLocation;
   std::string altFormWord;
+  // Sentence and book of the reader selection, for the learner vocabulary log.
+  CjkDictionary::VocabContext vocabContext_;
+  void captureVocabContext(const WordSelectNavigator& navigator, int fromIdx, int toIdx);
 
   // CLEANUP: on Auto-only commit, delete only this line (threshold/cache/method below drive Auto mode — keep)
   static constexpr uint32_t AUTO_POPUP_CSPT_ENTRY_THRESHOLD = 50000;

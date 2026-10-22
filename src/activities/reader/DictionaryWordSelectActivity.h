@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "../Activity.h"
+#include "util/CjkSegmenter.h"
 #include "util/DictionaryLookupController.h"
 #include "util/WordSelectNavigator.h"
 #if CROSSINK_APP_CAP_TOUCH
@@ -18,6 +19,7 @@
 class DictionaryWordSelectActivity final : public Activity {
 #ifdef SIMULATOR
   friend struct ClippingSelectionSmokeTest;
+  friend struct CjkDictionarySmokeTest;
 #endif
  public:
   using ReaderPageLoadFn = std::unique_ptr<Page> (*)(void* context, int pageOffset);
@@ -83,6 +85,9 @@ class DictionaryWordSelectActivity final : public Activity {
     std::unique_ptr<WordSelectNavigator::Row[]> rows;
     std::unique_ptr<char[]> textPool;
     std::unique_ptr<char[]> measurementScratch;
+    // CJK word spans for the navigator (see WordSelectNavigator::setSegmentation);
+    // allocated only when a Mandarin pack is installed and the page has Han text.
+    std::unique_ptr<uint8_t[]> spans;
     size_t wordCapacity = 0;
     size_t wordCount = 0;
     size_t rowCapacity = 0;
@@ -96,6 +101,7 @@ class DictionaryWordSelectActivity final : public Activity {
       rows.reset();
       textPool.reset();
       measurementScratch.reset();
+      spans.reset();
       wordCapacity = 0;
       wordCount = 0;
       rowCapacity = 0;
@@ -108,6 +114,10 @@ class DictionaryWordSelectActivity final : public Activity {
 
   WorkingSet workingSet_;
   WordSelectNavigator navigator;
+  CjkSegmenter segmenter_;
+  // Attach dictionary word segmentation when the page has Han text and a pack exists.
+  void attachCjkSegmentation();
+  static void ensureSegmentedThunk(void* ctx, int flatIdx);
   // Shared with the stacked definition activity. It is fixed storage inside
   // this activity, so it adds no allocator churn and replaces two simultaneous
   // 4 KB snapshots with one.

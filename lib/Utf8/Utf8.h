@@ -123,6 +123,17 @@ inline bool utf8IsCjkWordCharacter(const uint32_t cp) {
          || (cp >= 0x30000 && cp <= 0x323AF);  // CJK Extensions G-H
 }
 
+// Returns true for Han ideographs (hanzi/kanji/hanja), the characters a Chinese
+// dictionary is keyed on. Excludes kana, Hangul, Bopomofo and punctuation.
+inline bool utf8IsHan(const uint32_t cp) {
+  return (cp >= 0x3400 && cp <= 0x4DBF)        // CJK Extension A
+         || (cp >= 0x4E00 && cp <= 0x9FFF)     // CJK Unified Ideographs
+         || (cp >= 0xF900 && cp <= 0xFAFF)     // CJK Compatibility Ideographs
+         || (cp >= 0x20000 && cp <= 0x2EBEF)   // CJK Extensions B-F
+         || (cp >= 0x2F800 && cp <= 0x2FA1F)   // CJK Compatibility Ideographs Supplement
+         || (cp >= 0x30000 && cp <= 0x323AF);  // CJK Extensions G-H
+}
+
 // Writes cp as UTF-8 (1-4 bytes, no terminator) and returns the position after it.
 inline char* utf8AppendCodepoint(char* output, const uint32_t codepoint) {
   if (codepoint < 0x80) {

@@ -46,6 +46,7 @@ class EpubReaderActivity final : public Activity {
   friend struct EpubReaderCompletionSmokeTest;
   friend struct ScreenCalibrationSmokeTest;
   friend struct ClippingSelectionSmokeTest;
+  friend struct CjkDictionarySmokeTest;
 #endif
  public:
   bool usesFullScreenReaderVerticalSwipes() const override { return true; }

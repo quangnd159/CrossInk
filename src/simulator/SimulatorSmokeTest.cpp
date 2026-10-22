@@ -20,6 +20,7 @@
 
 #include "AssetDownloadSmokeTest.h"
 #include "BookFontSystem.h"
+#include "CjkDictionarySmokeTest.h"
 #include "ClippingSelectionSmokeTest.h"
 #include "OpdsCatalogSmokeTest.h"
 #include "ReadingUploadSmokeTest.h"
@@ -5759,6 +5760,16 @@ class SimulatorSmokeTest {
           std::_Exit(0);
         }
         if (std::getenv("CROSSINK_SIMULATOR_SMOKE_DICTIONARY")) verifyDictionaryElisions();
+        if (std::getenv("CROSSINK_SIMULATOR_SMOKE_CJK_DICTIONARY")) {
+          // Dedicated scenario: open the Chinese book directly and skip the
+          // unrelated settings/home checks.
+          const char* bookPath = std::getenv("CROSSINK_SIMULATOR_SMOKE_BOOK");
+          if (!bookPath || !Storage.exists(bookPath)) fail("CJK dictionary smoke needs --book");
+          CjkDictionarySmokeTest::prepareReaderFont();
+          activityManager.goToReader(bookPath, true);
+          queueStep("Reader", SmokeStep::Reader, 8);
+          break;
+        }
         if (std::getenv("CROSSINK_SIMULATOR_SMOKE_CHAPTER_PERCENTAGE")) {
           RenderLock lock;
           const auto capture = [&](const std::string& name) { captureStatusBarScreen(name.c_str()); };
@@ -6818,6 +6829,10 @@ class SimulatorSmokeTest {
       }
 
       case SmokeStep::Reader:
+        if (std::getenv("CROSSINK_SIMULATOR_SMOKE_CJK_DICTIONARY")) {
+          if (CjkDictionarySmokeTest::tick()) std::_Exit(0);
+          break;
+        }
 #if CROSSINK_APP_CAP_TOUCH
         if (std::getenv("CROSSINK_SIMULATOR_SMOKE_CLIPPING_SELECTION")) {
           if (ClippingSelectionSmokeTest::tick()) {

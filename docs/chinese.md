@@ -4,6 +4,29 @@ This fork is set up for learning Mandarin by reading: tap through a Chinese
 book a word at a time, see pinyin, meanings and HSK level, and collect every
 word you look up into a file you can import into Anki.
 
+## Quick start with the release bundle
+
+Each [release](https://github.com/quangnd159/CrossInk/releases) has a ready-made
+SD bundle: `crossink-chinese-sdcard-vi-*.zip` (Chinese–Vietnamese) or
+`crossink-chinese-sdcard-en-*.zip` (Chinese–English). Unzip it and copy each item
+into the matching place on the card, creating any folder the card does not have
+yet:
+
+| In the zip | Copy into, on the card |
+| --- | --- |
+| `dictionaries/zh` | `dictionaries/` |
+| `fonts/NotoSansSC` | `fonts/` |
+| `.crosspoint/languages/chinese-simplified.yaml` | `.crosspoint/languages/` |
+| `.crosspoint/languages/fonts/Noto Sans SC` | `.crosspoint/languages/fonts/` |
+
+Only the dictionary is needed for lookups; the rest are the reading font, the
+Chinese menus and the UI Font described below.
+
+Do not drag the whole `.crosspoint` or `fonts` folder onto the card. On a Mac,
+Finder offers to Replace the card's folder, which deletes your settings, reading
+progress and fonts. `.crosspoint` is hidden; show it with Cmd+Shift+. in Finder,
+or View > Show > Hidden items in Windows File Explorer.
+
 ## What you need on the SD card
 
 | What | Where on the card |

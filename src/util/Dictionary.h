@@ -72,6 +72,10 @@ struct DictDefinitionSlice {
 class Dictionary {
  public:
   static constexpr unsigned long LONG_PRESS_MS = 600;
+  // Touch hold that starts word select, on the page and inside a definition.
+  // Matches the SDK's TOUCH_LONG_PRESS_MS; e-ink adds a refresh before the
+  // highlight shows, so longer holds feel sluggish.
+  static constexpr unsigned long TOUCH_LOOKUP_HOLD_MS = 500;
 
   // Returns the active dictionary folder base path. A temporary lookup override
   // takes priority; otherwise resolves the per-book/global dictionary.bin files.

@@ -87,7 +87,7 @@
 #include "util/ScreenshotUtil.h"
 
 namespace {
-constexpr unsigned long TOUCH_DICTIONARY_LOOKUP_HOLD_MS = 1000;
+constexpr unsigned long TOUCH_DICTIONARY_LOOKUP_HOLD_MS = Dictionary::TOUCH_LOOKUP_HOLD_MS;
 // pagesPerRefresh now comes from SETTINGS.getRefreshFrequency()
 constexpr unsigned long longPressMenuMs = 600;
 constexpr uint16_t DEFAULT_AUTO_PAGE_TURN_INTERVAL_S = 30;

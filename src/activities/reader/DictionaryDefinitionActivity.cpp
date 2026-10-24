@@ -43,7 +43,7 @@ static constexpr char kBullet[] = "- ";
 static constexpr const char kEtymologyTreeMarker[] = "Etymology tree";
 static constexpr int kDictionarySwitchTouchHeight = 56;
 #if CROSSINK_APP_CAP_TOUCH
-static constexpr unsigned long kTouchDefinitionLookupHoldMs = 1000;
+static constexpr unsigned long kTouchDefinitionLookupHoldMs = Dictionary::TOUCH_LOOKUP_HOLD_MS;
 #endif
 
 class DictionaryDefinitionActivity;

@@ -1,3 +1,19 @@
+## [1.6.1.2] - 2026-10-24 (Mandarin learner fork)
+
+### Added
+
+- The NotoSansSC reading font in the SD bundles now comes in 16, 18 and 20 pt as well, for 8-20 pt in all.
+
+### Changed
+
+- Touch and hold opens word selection after half a second instead of a full second, on the page and inside a definition.
+
+### Fixed
+
+- Closing a dictionary definition on S3 readers clears the popup right away instead of waiting for the page to be redrawn, which was most noticeable on dense Chinese pages.
+- Selecting Chinese by touch works in whole words: holding a character highlights its whole word, and dragging extends the selection a word at a time. Dragging within one word still picks single characters.
+- Multi-word selection of Chinese with the buttons included only the first character of the last word, for example 老师告 instead of 老师告诉.
+
 ## [1.6.1.1] - 2026-10-22 (Mandarin learner fork)
 
 The first release of this fork, built on CrossInk 1.6.1 plus its unreleased changes up to `3d815cf3`. Firmware updates now come from this fork's releases. See [Reading Chinese](docs/chinese.md).

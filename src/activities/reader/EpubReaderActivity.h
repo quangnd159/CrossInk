@@ -273,6 +273,11 @@ class EpubReaderActivity final : public Activity {
   size_t renderModeToastRegionBufferSize = 0;
   ToastRect renderModeToastRegion;
   bool renderModeToastRegionSaved = false;
+  // PSRAM-only copy of the BW page taken when a lookup opens over it. Dismissing
+  // the definition evicts the reader glyph cache; showing this copy first makes
+  // the dismiss immediate while render() re-prewarms behind it. C3 never gets one.
+  HeapByteBuffer dictionaryReturnFrame_;
+  bool dictionaryReturnFrameValid_ = false;
   int completionTriggerSpineIndex = -1;
   float completionTriggerSpineProgress = 1.0f;
   bool completionPromptQueued = false;
@@ -489,6 +494,8 @@ class EpubReaderActivity final : public Activity {
                       bool autoLookupInitialWord = false);
   std::unique_ptr<Page> reloadDictionaryLookupPage(int pageOffset = 0);
   static std::unique_ptr<Page> reloadDictionaryLookupPageCallback(void* context, int pageOffset);
+  void captureDictionaryReturnFrame();
+  void restoreDictionaryReturnFrame();
   void onReaderMenuConfirm(EpubReaderMenuAction action, bool returnToReaderMenu = false,
                            const PendingOverlayResume* replacementResume = nullptr);
   // Opens the reader menu for the current position (short-press Confirm)

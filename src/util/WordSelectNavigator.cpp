@@ -108,8 +108,7 @@ bool WordSelectNavigator::getLookupSelectionRange(int& fromIdx, int& toIdx) cons
     return true;
   }
   if (inMultiSelectMode && anchorFlatIndex >= 0) {
-    fromIdx = anchorFlatIndex;
-    toIdx = currentIdx;
+    multiSelectRange(fromIdx, toIdx);
     return true;
   }
   fromIdx = currentIdx;
@@ -187,6 +186,17 @@ int WordSelectNavigator::segmentEndOf(const int idx) const {
   const uint8_t span = spans_[start];
   if (span == 0 || span == kSpanUnknown) return idx;
   return std::min(start + static_cast<int>(span) - 1, static_cast<int>(words.size()) - 1);
+}
+
+void WordSelectNavigator::multiSelectRange(int& lo, int& hi) const {
+  const int cursorIdx = getCurrentFlatIndex();
+  lo = std::min(anchorFlatIndex, cursorIdx);
+  hi = std::max(anchorFlatIndex, cursorIdx);
+  if (!spans_) return;
+  const int loStart = segmentStartOf(lo);
+  if (lo != hi && loStart == segmentStartOf(hi)) return;
+  lo = loStart;
+  hi = segmentEndOf(hi);
 }
 
 void WordSelectNavigator::snapToSegmentStart() {
@@ -451,11 +461,24 @@ bool WordSelectNavigator::selectWordAtPoint(const int x, const int y, const int 
 
   if (bestIdx < 0) return false;
   if (hit) *hit = true;
-  if (spans_ && !inMultiSelectMode) {
-    ensureSegmentedAt(bestIdx);
-    bestIdx = segmentStartOf(bestIdx);
-  }
-  return selectIndex(bestIdx);
+  // Segment on the input path even mid-drag: renderHighlight() only reads spans.
+  ensureSegmentedAt(bestIdx);
+  if (spans_ && !inMultiSelectMode) bestIdx = segmentStartOf(bestIdx);
+  return selectDragIndex(bestIdx);
+}
+
+bool WordSelectNavigator::selectDragIndex(const int index) {
+  if (!inMultiSelectMode || !spans_) return selectIndex(index);
+  // Characters of one snapped word share a highlight; moving between them must
+  // not cost an e-ink refresh.
+  int loBefore = -1;
+  int hiBefore = -1;
+  multiSelectRange(loBefore, hiBefore);
+  selectIndex(index);
+  int lo = -1;
+  int hi = -1;
+  multiSelectRange(lo, hi);
+  return lo != loBefore || hi != hiBefore;
 }
 
 bool WordSelectNavigator::selectIndex(const int index) {
@@ -483,7 +506,8 @@ bool WordSelectNavigator::selectNearestWord(const int x, const int y, const int 
       bestX = dx;
     }
   }
-  return selectIndex(nearest);
+  ensureSegmentedAt(nearest);
+  return selectDragIndex(nearest);
 }
 
 bool WordSelectNavigator::setTouchSelection(const int anchor, const int cursor) {
@@ -507,10 +531,12 @@ WordSelectNavigator::MultiSelectAction WordSelectNavigator::handleMultiSelectInp
       return MultiSelectAction::None;
     }
     if (input.wasReleased(MappedInputManager::Button::Confirm)) {
-      const int cursorIdx = getCurrentFlatIndex();
-      outPhrase = buildPhrase(anchorFlatIndex, cursorIdx);
-      completedSelectionStart = anchorFlatIndex;
-      completedSelectionEnd = cursorIdx;
+      int lo = -1;
+      int hi = -1;
+      multiSelectRange(lo, hi);
+      outPhrase = buildPhrase(lo, hi);
+      completedSelectionStart = lo;
+      completedSelectionEnd = hi;
       inMultiSelectMode = false;
       return MultiSelectAction::PhraseReady;
     }
@@ -561,12 +587,12 @@ bool WordSelectNavigator::beginTouchMultiSelect() {
 
 std::string WordSelectNavigator::finishTouchMultiSelect() {
   if (!inMultiSelectMode) return {};
-  int endIdx = getCurrentFlatIndex();
-  // A hold without a drag on a segmented CJK word selects the whole word.
-  if (endIdx == anchorFlatIndex) endIdx = segmentEndOf(anchorFlatIndex);
-  const std::string phrase = buildPhrase(anchorFlatIndex, endIdx);
-  completedSelectionStart = anchorFlatIndex;
-  completedSelectionEnd = endIdx;
+  int lo = -1;
+  int hi = -1;
+  multiSelectRange(lo, hi);
+  const std::string phrase = buildPhrase(lo, hi);
+  completedSelectionStart = lo;
+  completedSelectionEnd = hi;
   inMultiSelectMode = false;
   return phrase;
 }
@@ -602,13 +628,14 @@ void WordSelectNavigator::renderHighlight(const GfxRenderer& renderer, int lineH
                                           const bool foregroundBlack) const {
   if (inMultiSelectMode) {
     const int cursorIdx = getCurrentFlatIndex();
-    const int lo = std::min(anchorFlatIndex, cursorIdx);
-    const int hi = std::max(anchorFlatIndex, cursorIdx);
+    int lo = -1;
+    int hi = -1;
+    multiSelectRange(lo, hi);
     for (int i = lo; i <= hi; i++) {
       drawSingleHighlight(renderer, lineHeight, i, foregroundBlack);
       drawContinuationsIfOutside(renderer, lineHeight, getWordAt(i), lo, hi, foregroundBlack);
     }
-    drawTouchDragCursor(renderer, lineHeight, cursorIdx, foregroundBlack);
+    drawTouchDragCursor(renderer, lineHeight, cursorIdx >= anchorFlatIndex ? hi : lo, foregroundBlack);
   } else {
     const int selIdx = getCurrentFlatIndex();
     if (selIdx < 0) return;

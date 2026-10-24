@@ -379,6 +379,12 @@ class WordSelectNavigator {
   // Union of boundsForWord over the segment starting at wordIndex when it sits
   // on one row; Rect{} when the segment wraps rows (caller falls back).
   Rect boundsForSegment(int wordIndex, int lineHeight) const;
+  // Ordered anchor..cursor range of an active multi-select. With segmentation
+  // both ends cover whole words, except a drag that stays inside one word,
+  // which keeps its characters. Reads only already-segmented spans.
+  void multiSelectRange(int& lo, int& hi) const;
+  // selectIndex() for touch selectors; mid-drag it reports a visible change only.
+  bool selectDragIndex(int index);
 
   uint8_t* spans_ = nullptr;
   EnsureSegmentedFn ensureSegmented_ = nullptr;

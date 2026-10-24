@@ -137,7 +137,43 @@ bool CjkDictionarySmokeTest::tick() {
         }
       }
       require(target >= 0, "No multi-character word found on the page");
-      LOG_INF("SMOKE", "CJK lookup target: %s", selectedPhrase(nav).c_str());
+      const std::string targetPhrase = selectedPhrase(nav);
+      LOG_INF("SMOKE", "CJK lookup target: %s", targetPhrase.c_str());
+
+      // Touch press-and-hold on the word's last character, released without a
+      // drag, must look up the whole segmented word like the button cursor.
+      {
+        const int last = nav.segmentEndOf(target);
+        const auto* w = nav.getWordAt(last);
+        const int lineHeight = renderer.getLineHeight(SETTINGS.getReaderFontId());
+        bool hit = false;
+        nav.selectWordAtPoint(w->screenX + w->width / 2, w->screenY + w->heightOr(lineHeight) / 2, lineHeight, &hit);
+        require(hit && nav.getCurrentFlatIndex() == target, "Touch did not snap to the word start");
+        require(nav.beginTouchMultiSelect(), "Touch hold did not start a selection");
+        const std::string touchPhrase = nav.finishTouchMultiSelect();
+        LOG_INF("SMOKE", "CJK touch hold phrase: %s", touchPhrase.c_str());
+        require(touchPhrase == targetPhrase, "Touch hold did not select the whole word");
+
+        // Dragging onto the first character of the next word takes all of it.
+        const int nextStart = last + 1;
+        if (nav.getWordAt(nextStart)) {
+          nav.selectIndex(target);
+          nav.beginTouchMultiSelect();
+          nav.selectIndex(nextStart);
+          const std::string dragPhrase = nav.finishTouchMultiSelect();
+          const std::string expected = nav.buildPhrase(target, nav.segmentEndOf(nextStart));
+          LOG_INF("SMOKE", "CJK touch drag phrase: %s", dragPhrase.c_str());
+          require(dragPhrase == expected, "Touch drag did not cover the whole next word");
+        }
+
+        // A drag that stays inside one word keeps its characters.
+        nav.selectIndex(target);
+        nav.beginTouchMultiSelect();
+        nav.selectIndex(target + 1);
+        const std::string innerPhrase = nav.finishTouchMultiSelect();
+        require(innerPhrase == nav.buildPhrase(target, target + 1), "In-word drag did not keep characters");
+        nav.selectIndex(target);
+      }
       selection->requestUpdate();
       stage = 6;
       return false;

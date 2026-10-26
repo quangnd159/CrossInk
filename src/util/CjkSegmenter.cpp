@@ -20,8 +20,7 @@ bool CjkSegmenter::ensureScratch() {
   return scratch_ != nullptr;
 }
 
-bool CjkSegmenter::segmentCells(const std::string& text, const uint16_t* byteAt, const int cellCount,
-                                uint8_t* lens) {
+bool CjkSegmenter::segmentCells(const std::string& text, const uint16_t* byteAt, const int cellCount, uint8_t* lens) {
   for (int i = 0; i < cellCount; i++) lens[i] = 1;
   if (cellCount <= 0) return true;
   if (!ensureScratch()) return false;
@@ -97,8 +96,9 @@ struct RunCell {
 
 bool isPunctuation(const uint32_t cp) {
   if (cp < 0x80) return !((cp >= '0' && cp <= '9') || (cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z'));
-  return !utf8IsHan(cp) && !utf8IsCjkWordCharacter(cp) && (utf8IsCjkCodepoint(cp) || (cp >= 0x2000 && cp <= 0x2BFF) ||
-                                                          (cp >= 0xFE10 && cp <= 0xFE6F) || (cp >= 0xFF01 && cp <= 0xFFEE));
+  return !utf8IsHan(cp) && !utf8IsCjkWordCharacter(cp) &&
+         (utf8IsCjkCodepoint(cp) || (cp >= 0x2000 && cp <= 0x2BFF) || (cp >= 0xFE10 && cp <= 0xFE6F) ||
+          (cp >= 0xFF01 && cp <= 0xFFEE));
 }
 
 RunCell parseRunCell(const char* token) {

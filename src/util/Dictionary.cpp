@@ -1,7 +1,5 @@
 #include "Dictionary.h"
 
-#include "CjkDictionary.h"
-
 #include <HalStorage.h>
 #include <Logging.h>
 #include <Memory.h>
@@ -11,6 +9,7 @@
 #include <cctype>
 #include <cstring>
 
+#include "CjkDictionary.h"
 #include "TextPool.h"
 
 // Static member definitions

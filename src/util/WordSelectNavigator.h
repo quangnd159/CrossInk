@@ -390,8 +390,7 @@ class WordSelectNavigator {
   EnsureSegmentedFn ensureSegmented_ = nullptr;
   void* segmentCtx_ = nullptr;
   void ensureSegmentedAt(int idx) const {
-    if (spans_ && ensureSegmented_ && idx >= 0 && idx < static_cast<int>(words.size()) &&
-        spans_[idx] == kSpanUnknown) {
+    if (spans_ && ensureSegmented_ && idx >= 0 && idx < static_cast<int>(words.size()) && spans_[idx] == kSpanUnknown) {
       ensureSegmented_(segmentCtx_, idx);
     }
   }

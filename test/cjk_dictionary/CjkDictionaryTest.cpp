@@ -162,8 +162,8 @@ TEST(CjkDictionaryFormat, SeparatesMergedEntries) {
 
 TEST(CjkDictionaryFormat, VocabRowUsesFirstEntryAndCleansFields) {
   const std::string row = CjkDictionary::formatVocabRow(
-      "行", "【xíng】\n[HSK 1]\n• to walk\n• to go\n• OK\n• capable\n例句\n\n---\n【háng】\n• row",
-      "我们<b>行</b>吗？", "Book\tTitle");
+      "行", "【xíng】\n[HSK 1]\n• to walk\n• to go\n• OK\n• capable\n例句\n\n---\n【háng】\n• row", "我们<b>行</b>吗？",
+      "Book\tTitle");
   EXPECT_EQ(row, "行\txíng\tto walk; to go; OK\t我们<b>行</b>吗？\tBook Title\tHSK 1");
 }
 

@@ -246,13 +246,13 @@ const EpdFont uiSymbols10Font(&ui_symbols_10);
 
 EpdFont ui10RegularFont(&inter_10_regular);
 EpdFont ui10BoldFont(&inter_10_bold);
-EpdFontFamily ui10FontFamily = EpdFontFamily(&ui10RegularFont, &ui10BoldFont, nullptr, nullptr, &uiSymbols10Font)
-                                   .withScriptFallback(&cjkUi10Font);
+EpdFontFamily ui10FontFamily =
+    EpdFontFamily(&ui10RegularFont, &ui10BoldFont, nullptr, nullptr, &uiSymbols10Font).withScriptFallback(&cjkUi10Font);
 
 EpdFont ui12RegularFont(&inter_12_regular);
 EpdFont ui12BoldFont(&inter_12_bold);
-EpdFontFamily ui12FontFamily = EpdFontFamily(&ui12RegularFont, &ui12BoldFont, nullptr, nullptr, &uiSymbols10Font)
-                                   .withScriptFallback(&cjkUi12Font);
+EpdFontFamily ui12FontFamily =
+    EpdFontFamily(&ui12RegularFont, &ui12BoldFont, nullptr, nullptr, &uiSymbols10Font).withScriptFallback(&cjkUi12Font);
 
 const char* resetReasonName(const esp_reset_reason_t reason) {
   switch (reason) {

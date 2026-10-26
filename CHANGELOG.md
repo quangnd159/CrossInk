@@ -2,6 +2,8 @@
 
 ### Fixed
 
+- Update instructions now make clear that Chinese translations must be reapplied after copying the updated SD language file; firmware updates preserve the installed language.
+
 - Tapping outside a touch word selection no longer freezes the reader while trying to acquire the rendering mutex twice.
 - Quick taps on the Look Up and Clip buttons now work even when the touch press and release arrive in the same input frame.
 - Settings on S3 readers reserve room for the publisher-font option, avoiding an unnecessary list reallocation.

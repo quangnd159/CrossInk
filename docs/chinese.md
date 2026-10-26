@@ -56,6 +56,12 @@ To switch the menus to Chinese:
 2. On the reader, open **Settings > System > Device > Language** and choose
    **简体中文**. The reader restarts in Chinese.
 
+After a firmware update, replace this YAML with the current release’s file and
+select **简体中文** again, even if it is already selected. Firmware updates keep
+the previously installed language cache; copying the file or restarting alone
+does not apply it. If **Save Word** still appears in English, reapplying the
+updated file changes it to **保存生词**. Dictionaries and fonts do not need replacing.
+
 **Rare and traditional characters (X4 Classic, X4 Pro, Sticky).** Characters
 outside the built-in set show as ◆ until you add a UI Font. Make one from the
 Noto Sans CJK source in this repository:

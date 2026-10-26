@@ -1251,11 +1251,11 @@ bool DictionaryWordSelectActivity::handleTouchSelection() {
   if (touchSelectionActive_ && tapped) {
     const int action = TextSelectionOverlay::actionAt(layout, x, y);
     if (action >= 0) {
-      if (action == touchPressedAction_) {
-        lock.unlock();
-        performTouchSelectionAction(action);
-      }
-      touchPressedAction_ = -1;
+      // The SDK tap reports the original touch-down position. A short press
+      // and release can arrive in one input frame, so an earlier down event
+      // is neither required nor guaranteed to have reached this activity.
+      lock.unlock();
+      performTouchSelectionAction(action);
       return true;
     }
     if (layout.startHandle.contains(x, y) || layout.endHandle.contains(x, y)) return true;
@@ -1267,12 +1267,14 @@ bool DictionaryWordSelectActivity::handleTouchSelection() {
           y <= word->screenY + word->heightOr(renderer.getLineHeight(SETTINGS.getReaderFontId())))
         return true;
     }
+    // cancelToReader() acquires its own RenderLock. The hardware mutex is
+    // non-recursive, unlike the simulator's semaphore implementation.
+    lock.unlock();
     cancelToReader();
     return true;
   }
   if (pressed) {
-    touchPressedAction_ = touchSelectionActive_ ? TextSelectionOverlay::actionAt(layout, x, y) : -1;
-    if (touchPressedAction_ >= 0) return true;
+    if (touchSelectionActive_ && TextSelectionOverlay::actionAt(layout, x, y) >= 0) return true;
     bool startDrag = false;
     touchDragOffsetX_ = touchDragOffsetY_ = 0;
     if (touchSelectionActive_) {

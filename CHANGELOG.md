@@ -1,3 +1,11 @@
+## [1.6.1.4] - 2026-10-26 (Mandarin learner fork)
+
+### Fixed
+
+- Tapping outside a touch word selection no longer freezes the reader while trying to acquire the rendering mutex twice.
+- Quick taps on the Look Up and Clip buttons now work even when the touch press and release arrive in the same input frame.
+- Settings on S3 readers reserve room for the publisher-font option, avoiding an unnecessary list reallocation.
+
 ## [1.6.1.3] - 2026-10-26 (Mandarin learner fork)
 
 ### Changed

@@ -224,6 +224,9 @@ bool ClippingSelectionSmokeTest::tick() {
       break;
     case 14:
       press(selection->touchSelectionLayout().actions[1]);
+      // A quick hardware tap can deliver down and up in the same input frame.
+      mappedInputManager.simulatorInjectTouchRelease(x, y);
+      stage = 16;
       break;
     case 16:
       if (!reader) {
@@ -248,6 +251,8 @@ bool ClippingSelectionSmokeTest::tick() {
       require(selection->touchLookupEnabled_, "Installed dictionary lookup disabled");
       capture("clip-actions-lookup");
       press(selection->touchSelectionLayout().actions[0]);
+      mappedInputManager.simulatorInjectTouchRelease(x, y);
+      stage = 26;
       break;
     case 40: {
       require(selection && selection->hasNextReaderPage_, "Fixture has no next reader page");

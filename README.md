@@ -1,3 +1,8 @@
+> [!WARNING]
+> **This is a personal, experimental project.** I maintain this fork for my own reading and language learning. Testing is limited, and a successful build or simulator test does not guarantee that every feature works on your device. Bugs can cause freezes or affect your reading data. If you choose to try it, back up your SD card and keep a known-working firmware file so you can roll back. Please treat the firmware as experimental.
+>
+> **Known issue:** an X4 Pro user reported a complete lock-up around the word-selection toolbar in v1.6.1.3. A fix is being prepared; until it is verified, avoid that version's touch-selection flow or return to your previous working firmware.
+
 > [!NOTE]
 > **This is a Mandarin learner's fork of [CrossInk](https://github.com/uxjulia/CrossInk)**, itself a fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader). It adds Chinese menus, built-in Chinese glyphs for file names and titles, and a Chinese dictionary with tap-to-look-up word segmentation, pinyin, HSK levels and a Save Word button that collects words into an Anki-ready vocabulary log. See [Reading Chinese](docs/chinese.md). Everything below is CrossInk's own README. Firmware updates for this fork come from [its releases](https://github.com/quangnd159/CrossInk/releases), not from CrossInk's.
 

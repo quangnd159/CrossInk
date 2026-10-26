@@ -160,7 +160,6 @@ class DictionaryWordSelectActivity final : public Activity {
   bool ignoreTouchUntilRelease_ = false;
   int touchDragOffsetX_ = 0;
   int touchDragOffsetY_ = 0;
-  int touchPressedAction_ = -1;
   // Only needed if the next-page working set cannot be built.
 
   std::string pendingTouchPhrase_;

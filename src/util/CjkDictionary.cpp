@@ -6,10 +6,10 @@
 #include <Utf8.h>
 #include <WordLookup.h>
 
-#include "VocabLog.h"
-
 #include <algorithm>
 #include <cstring>
+
+#include "VocabLog.h"
 
 namespace CjkDictionary {
 namespace {
@@ -187,8 +187,8 @@ void appendField(std::string& out, const char* text, const size_t len) {
 
 }  // namespace
 
-std::string formatVocabRow(const std::string& headword, const std::string& definition,
-                           const std::string& sentenceHtml, const std::string& book) {
+std::string formatVocabRow(const std::string& headword, const std::string& definition, const std::string& sentenceHtml,
+                           const std::string& book) {
   static constexpr char kOpen[] = "\xE3\x80\x90";    // 【
   static constexpr char kClose[] = "\xE3\x80\x91";   // 】
   static constexpr char kBullet[] = "\xE2\x80\xA2";  // •
@@ -304,8 +304,8 @@ DictLocation locate(const std::string& word, const VocabContext* vocab) {
 
   std::string html = formatEntryHtml(entry.headword, entry.definition);
   if (vocab) {
-    VocabLog::append(VocabLog::kMandarinPath,
-                     formatVocabRow(entry.headword, entry.definition, vocab->sentenceHtml, vocab->book));
+    VocabLog::stage(VocabLog::kMandarinPath,
+                    formatVocabRow(entry.headword, entry.definition, vocab->sentenceHtml, vocab->book));
   }
   entry.definition.clear();
   entry.definition.shrink_to_fit();

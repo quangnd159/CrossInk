@@ -225,12 +225,12 @@ void NearbyStatsSyncActivity::onEnter() {
   setState(State::STARTING);
 
   if (esp_efuse_mac_get_default(localDeviceMac_.data()) != ESP_OK) {
-    setError("Could not read device id");
+    setError(tr(STR_NEARBY_POSITION_DEVICE_ID_FAILED));
     return;
   }
 
   if (!beginEspNow()) {
-    setError("Could not start nearby sync");
+    setError(tr(STR_NEARBY_STATS_START_FAILED));
     return;
   }
 
@@ -318,7 +318,7 @@ void NearbyStatsSyncActivity::endEspNow() {
 bool NearbyStatsSyncActivity::prepareLocalStats() {
   localStatsReady_ = false;
   if (!ensureSyncedStatsDirectory()) {
-    setError("could not create synced stats directory");
+    setError(tr(STR_NEARBY_STATS_SAVE_FAILED));
     return false;
   }
 
@@ -326,7 +326,7 @@ bool NearbyStatsSyncActivity::prepareLocalStats() {
   GlobalReadingStats::load().save();
 
   if (!readSmallFile(GLOBAL_STATS_PATH, localStats_, localStatsSize_)) {
-    setError("local stats unavailable");
+    setError(tr(STR_NEARBY_STATS_UNAVAILABLE));
     return false;
   }
 
@@ -440,7 +440,7 @@ void NearbyStatsSyncActivity::processEvents() {
     }
 
     if (hasOverflow) {
-      setError("sync event queue overflow");
+      setError(tr(STR_NEARBY_POSITION_QUEUE_OVERFLOW));
       return;
     }
     if (!hasEvent) return;
@@ -505,7 +505,7 @@ void NearbyStatsSyncActivity::handleEvent(const SyncEvent& event) {
 
   if (event.type == PacketType::STATS) {
     if (!writeSyncedStatsFile(syncedStatsPathForDeviceMac(peerDeviceMac_), event.stats.data(), event.statsSize)) {
-      setError("could not save stats");
+      setError(tr(STR_NEARBY_STATS_SAVE_FAILED));
       return;
     }
     peerStatsSaved_ = true;
@@ -594,7 +594,7 @@ void NearbyStatsSyncActivity::updateSyncProgress() {
 
   const uint32_t now = millis();
   if (now - syncStartedMs_ > SYNC_TIMEOUT_MS) {
-    setError(peerSeen_ ? "stats sync timed out" : "no reader found");
+    setError(peerSeen_ ? tr(STR_NEARBY_STATS_TIMEOUT) : tr(STR_NEARBY_POSITION_NO_READER));
     return;
   }
 

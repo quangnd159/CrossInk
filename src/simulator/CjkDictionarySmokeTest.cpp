@@ -17,6 +17,9 @@
 #include "activities/ActivityManager.h"
 #include "activities/reader/DictionaryWordSelectActivity.h"
 #include "activities/reader/EpubReaderActivity.h"
+#include "components/UITheme.h"
+#include "util/DictionaryLookupWorker.h"
+#include "util/VocabLog.h"
 
 extern ActivityManager activityManager;
 extern GfxRenderer renderer;
@@ -77,6 +80,7 @@ bool CjkDictionarySmokeTest::tick() {
   switch (stage) {
     case 0:
       if (!reader) return false;
+      Storage.remove("/vocab/mandarin.tsv");
       reader->openWordSelect(false);
       stage = 1;
       return false;
@@ -179,11 +183,26 @@ bool CjkDictionarySmokeTest::tick() {
       return false;
     }
 
-    case 6:
+    case 6: {
+      // Cancel after the worker has found and staged a word, but before the UI
+      // accepts the result. Returning to an older definition must not offer it.
+      require(selection != nullptr, "Word select closed unexpectedly");
+      DictionaryLookupController cancelled(renderer, mappedInputManager, *selection, selection->cachePath);
+      cancelled.setLookupToastEnabled(false);
+      cancelled.startLookup(selectedPhrase(selection->navigator));
+      DictionaryLookupWorker::instance().waitForOwner(cancelled);
+      require(VocabLog::hasStaged(), "Cancellation test did not stage a Mandarin word");
+      cancelled.requestBack();
+      require(cancelled.handleInput() == DictionaryLookupController::LookupEvent::Cancelled,
+              "Completed lookup did not accept cancellation");
+      require(!VocabLog::hasStaged(), "Cancelled lookup left a different word available to save");
+      require(!Storage.exists("/vocab/mandarin.tsv"), "Cancelled lookup saved vocabulary");
+      cancelled.onExit();
       capture("cjk-select-target");
       mappedInputManager.simulatorInjectPress(MappedInputManager::Button::Confirm);
       stage = 7;
       return false;
+    }
 
     case 7:
       mappedInputManager.simulatorInjectRelease(MappedInputManager::Button::Confirm);
@@ -201,9 +220,23 @@ bool CjkDictionarySmokeTest::tick() {
 
     case 9:
       capture("cjk-definition");
+      // Looking a word up must not save it; only the Save Word action does.
+      require(!Storage.exists("/vocab/mandarin.tsv"), "Lookup saved the word without Save Word");
+      mappedInputManager.simulatorInjectPress(MappedInputManager::Button::Right);
+      stage = 20;
+      return false;
+
+    case 20:
+      mappedInputManager.simulatorInjectRelease(MappedInputManager::Button::Right);
+      stage = 21;
+      return false;
+
+    case 21:
+      capture("cjk-definition-saved");
       {
         HalFile vocab;
-        require(Storage.openFileForRead("SMOKE", "/vocab/mandarin.tsv", vocab), "Vocabulary log was not written");
+        require(Storage.openFileForRead("SMOKE", "/vocab/mandarin.tsv", vocab),
+                "Save Word did not write the vocabulary log");
         std::string text;
         for (int c = vocab.read(); c >= 0; c = vocab.read()) text += static_cast<char>(c);
         vocab.close();
@@ -249,6 +282,11 @@ bool CjkDictionarySmokeTest::tick() {
 
     case 13:
       capture("cjk-ui-settings");
+      // Capture Home in the requested theme (e.g. --theme dashboard) for UI language checks.
+      if (const char* theme = std::getenv("CROSSINK_SIMULATOR_SMOKE_THEME")) {
+        SETTINGS.uiTheme = static_cast<uint8_t>(std::atoi(theme));
+        UITheme::getInstance().reload();
+      }
       activityManager.goHome();
       stage = 14;
       return false;

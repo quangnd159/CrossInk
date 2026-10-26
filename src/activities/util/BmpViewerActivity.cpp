@@ -90,7 +90,7 @@ void BmpViewerActivity::loadSiblingImages() {
 bool BmpViewerActivity::renderPngImage() {
   ImageDimensions dims;
   if (!PngToFramebufferConverter::getDimensionsStatic(filePath, dims)) {
-    drawImageError(renderer, mappedInput, "Invalid PNG File");
+    drawImageError(renderer, mappedInput, tr(STR_INVALID_PNG_FILE));
     return false;
   }
 
@@ -121,7 +121,7 @@ bool BmpViewerActivity::renderPngImage() {
   PngToFramebufferConverter converter;
   renderer.clearScreen();
   if (!converter.decodeToFramebuffer(filePath, renderer, config)) {
-    drawImageError(renderer, mappedInput, "Invalid PNG File");
+    drawImageError(renderer, mappedInput, tr(STR_INVALID_PNG_FILE));
     return false;
   }
   renderer.preserveImagePolarity(x, y, drawWidth, drawHeight);
@@ -251,13 +251,13 @@ void BmpViewerActivity::drawImage() {
 
     } else {
       // Handle file parsing error
-      drawImageError(renderer, mappedInput, "Invalid BMP File");
+      drawImageError(renderer, mappedInput, tr(STR_INVALID_BMP_FILE));
     }
 
     file.close();
   } else {
     // Handle file open error
-    drawImageError(renderer, mappedInput, "Could not open file");
+    drawImageError(renderer, mappedInput, tr(STR_FILE_OPEN_FAILED));
   }
 }
 

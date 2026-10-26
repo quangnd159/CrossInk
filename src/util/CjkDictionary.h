@@ -33,8 +33,9 @@ bool wantsWord(const std::string& word);
 // dictionary word at the start of `word` is used (selecting 我们的 finds 我们).
 // On success the entry is written to the scratch StarDict file and the returned
 // location points at it. readError is set only for SD failures.
-// When `vocab` is given, a found entry is also appended to the learner's
-// vocabulary log (see VocabLog.h) with that sentence and book.
+// When `vocab` is given, a found entry is also staged for the learner's
+// vocabulary log (see VocabLog.h) with that sentence and book; it is written
+// only if the learner presses Save in the definition popup.
 struct VocabContext {
   std::string sentenceHtml;  // sentence around the selection, word in <b></b>
   std::string book;
@@ -60,7 +61,7 @@ std::string formatEntryHtml(const std::string& headword, const std::string& defi
 // One tab-separated vocabulary row (no trailing newline): headword, reading,
 // up to three glosses joined by "; ", sentence, book, level tags. Tabs and
 // newlines inside fields become spaces. Exposed for host tests.
-std::string formatVocabRow(const std::string& headword, const std::string& definition,
-                           const std::string& sentenceHtml, const std::string& book);
+std::string formatVocabRow(const std::string& headword, const std::string& definition, const std::string& sentenceHtml,
+                           const std::string& book);
 
 }  // namespace CjkDictionary

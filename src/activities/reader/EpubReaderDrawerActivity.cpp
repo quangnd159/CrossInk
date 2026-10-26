@@ -1443,7 +1443,8 @@ void EpubReaderDrawerActivity::buildAutoPageTurnPane(UiApp::ScreenType& screen) 
   const bool buttonDevice = !mappedInput.hasTouchHardware();
   if (!buttonDevice) buildConfirmButton(screen);
   char value[16];
-  std::snprintf(value, sizeof(value), "%us", autoPageTurnIntervalSeconds);
+  std::snprintf(value, sizeof(value), tr(STR_DURATION_SECONDS_SHORT_FORMAT),
+                static_cast<unsigned long>(autoPageTurnIntervalSeconds));
   ReaderSliderRowProps slider;
   slider.value = value;
   slider.sliderValue =
@@ -1452,7 +1453,13 @@ void EpubReaderDrawerActivity::buildAutoPageTurnPane(UiApp::ScreenType& screen) 
   slider.sliderAction = ACTION_SLIDER;
   slider.decrement = ACTION_STEP;
   slider.increment = ACTION_STEP;
-  configureReaderSliderScale(slider, "5s", "120s");
+  char minimumLabel[16];
+  char maximumLabel[16];
+  std::snprintf(minimumLabel, sizeof(minimumLabel), tr(STR_DURATION_SECONDS_SHORT_FORMAT),
+                static_cast<unsigned long>(READER_AUTO_PAGE_TURN_MIN_SECONDS));
+  std::snprintf(maximumLabel, sizeof(maximumLabel), tr(STR_DURATION_SECONDS_SHORT_FORMAT),
+                static_cast<unsigned long>(READER_AUTO_PAGE_TURN_MAX_SECONDS));
+  configureReaderSliderScale(slider, minimumLabel, maximumLabel);
   const int16_t hintLineHeight =
       buttonDevice ? screen.target().lineHeight(ReaderSliderHints::style(screen.theme()).font) : 0;
   const int16_t hintsHeight =
@@ -2604,7 +2611,10 @@ void EpubReaderDrawerActivity::renderPreviewContents(const ReaderSettingsDraft& 
                            ? previewSettings.sdFontFamilyName.data()
                            : (previewSettings.fontFamily == 0 ? tr(STR_LEXEND_DECA) : tr(STR_BITTER));
     char label[128];
-    std::snprintf(label, sizeof(label), "%s \"%s\", %upt", tr(STR_PREVIEW), name, previewSettings.readerFontPointSize);
+    char pointSize[16];
+    std::snprintf(pointSize, sizeof(pointSize), tr(STR_POINT_SIZE_SHORT_FORMAT),
+                  static_cast<unsigned>(previewSettings.readerFontPointSize));
+    std::snprintf(label, sizeof(label), "%s \"%s\", %s", tr(STR_PREVIEW), name, pointSize);
     const int labelY = preview.bottom() - metrics.previewPadding - labelTextHeight - noteHeight;
     const int separatorY = labelY - 4;
     renderer.drawLine(preview.x, separatorY, preview.right() - 1, separatorY, ReaderUtils::readerForegroundBlack());
@@ -3273,7 +3283,8 @@ const char* EpubReaderDrawerActivity::rowValue(const RowId row, char* buffer, co
       CrossPointSettings::formatCharacterSpacing(draft.characterSpacing, buffer, bufferSize);
       return buffer;
     case RowId::FontSize:
-      std::snprintf(buffer, bufferSize, "%upt", draft.readerFontPointSize);
+      std::snprintf(buffer, bufferSize, tr(STR_POINT_SIZE_SHORT_FORMAT),
+                    static_cast<unsigned>(draft.readerFontPointSize));
       return buffer;
 #if CROSSINK_SCALABLE_FONTS
     case RowId::TtfHinting:
@@ -3326,10 +3337,12 @@ const char* EpubReaderDrawerActivity::rowValue(const RowId row, char* buffer, co
       return hasDictionaryFontOverride ? dictionaryFontFamilyName : tr(STR_DICT_USE_GLOBAL);
     case RowId::DictionaryFontSize:
       if (!hasDictionaryFontOverride || dictionaryFontPointSize == 0) return tr(STR_DICT_USE_GLOBAL);
-      std::snprintf(buffer, bufferSize, "%upt", dictionaryFontPointSize);
+      std::snprintf(buffer, bufferSize, tr(STR_POINT_SIZE_SHORT_FORMAT),
+                    static_cast<unsigned>(dictionaryFontPointSize));
       return buffer;
     case RowId::AutoPageTurn:
-      std::snprintf(buffer, bufferSize, "%us", autoPageTurnIntervalSeconds);
+      std::snprintf(buffer, bufferSize, tr(STR_DURATION_SECONDS_SHORT_FORMAT),
+                    static_cast<unsigned long>(autoPageTurnIntervalSeconds));
       return buffer;
     default:
       return nullptr;

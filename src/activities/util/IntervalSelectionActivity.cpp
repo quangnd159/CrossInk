@@ -66,11 +66,12 @@ bool contains(const Rect& rect, const int x, const int y) {
 
 void formatCompactSeconds(const int seconds, char* buf, const size_t len) {
   if (seconds < 60) {
-    snprintf(buf, len, "%ds", seconds);
+    snprintf(buf, len, tr(STR_DURATION_SECONDS_SHORT_FORMAT), static_cast<unsigned long>(seconds));
   } else if (seconds % 60 == 0) {
-    snprintf(buf, len, "%dm", seconds / 60);
+    snprintf(buf, len, tr(STR_DURATION_MINUTES_SHORT_FORMAT), static_cast<unsigned long>(seconds / 60));
   } else {
-    snprintf(buf, len, "%dm %ds", seconds / 60, seconds % 60);
+    snprintf(buf, len, tr(STR_DURATION_MINUTES_SECONDS_SHORT_FORMAT), static_cast<unsigned long>(seconds / 60),
+             static_cast<unsigned long>(seconds % 60));
   }
 }
 }  // namespace

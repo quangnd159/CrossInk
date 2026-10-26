@@ -280,9 +280,10 @@ void formatCompactReadingTime(uint32_t seconds, char* buf, size_t len) {
   const uint32_t hours = seconds / 3600;
   const uint32_t minutes = (seconds % 3600) / 60;
   if (hours == 0) {
-    snprintf(buf, len, "%lum", static_cast<unsigned long>(minutes));
+    snprintf(buf, len, tr(STR_DURATION_MINUTES_SHORT_FORMAT), static_cast<unsigned long>(minutes));
   } else {
-    snprintf(buf, len, "%luh %lum", static_cast<unsigned long>(hours), static_cast<unsigned long>(minutes));
+    snprintf(buf, len, tr(STR_DURATION_HOURS_MINUTES_SHORT_FORMAT), static_cast<unsigned long>(hours),
+             static_cast<unsigned long>(minutes));
   }
 }
 

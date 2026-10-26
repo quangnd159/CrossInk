@@ -452,7 +452,7 @@ void drawPerBookStatsCard(GfxRenderer& renderer, const int x, const int y, const
 // A day with no reading is a real zero, not "< 1 min".
 void formatDailyDuration(const uint32_t seconds, char* buf, const size_t len) {
   if (seconds == 0) {
-    snprintf(buf, len, "0 min");
+    snprintf(buf, len, tr(STR_DURATION_MINUTES_FORMAT), 0UL);
     return;
   }
   BookReadingStats::formatDuration(seconds, buf, len);

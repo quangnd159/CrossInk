@@ -25,7 +25,11 @@
 #include "util/FontFamilyLabel.h"
 #include "util/FrontlightSchedule.h"
 
-inline std::string fontSizePointLabel(const uint8_t pointSize) { return std::to_string(pointSize) + " pt"; }
+inline std::string fontSizePointLabel(const uint8_t pointSize) {
+  char label[24];
+  snprintf(label, sizeof(label), tr(STR_POINT_SIZE_FORMAT), static_cast<unsigned>(pointSize));
+  return label;
+}
 
 inline SettingInfo buildBuiltinFontSizeSetting() {
   SettingInfo s;
@@ -601,19 +605,31 @@ inline SettingInfo buildSideButtonActionSetting(const StrId nameId, uint8_t Cros
 // Each entry has a key (for JSON API) and category (for grouping).
 // ACTION-type entries and entries without a key are device-only.
 //
-// The static list is constructed exactly once (master's optimization, #1086 +
-// #1636) so the per-entry SettingInfo cost is paid once. Read-only consumers
-// can use it directly; mutable device UI lists use getSettingsList(), which
-// returns an owned copy and can add SD-card font and dictionary options.
-// 107 common entries. Four edge gesture entries are compiled only for touch
+// Nothing keeps the list resident: persistence and the web API walk it with
+// forEachBaseSetting(), and device UI lists use getSettingsList(), which
+// returns an owned list and can add SD-card font and dictionary options.
+// 110 common entries. Four edge gesture entries are compiled only for touch
 // devices; getBaseSettingsCapacity() adds the two runtime IMU entries.
-inline constexpr size_t BASE_SETTINGS_CAPACITY = 107 + (CROSSINK_APP_CAP_TOUCH ? 4 : 0);
+inline constexpr size_t BASE_SETTINGS_CAPACITY = 110 + (CROSSINK_APP_CAP_TOUCH ? 4 : 0);
 
 inline size_t getBaseSettingsCapacity() {
   return BASE_SETTINGS_CAPACITY + (QuickActions::supportsTiltPageTurn() ? 2 : 0);
 }
 
-const std::vector<SettingInfo>& getBaseSettingsList();
+using SettingVisitor = void (*)(void* context, SettingInfo& info);
+
+// Visits every base setting synchronously, in list order. The descriptor is
+// valid only during the callback; move from it to keep it. Persistence uses
+// this so no settings list stays resident after load or save.
+void forEachBaseSetting(SettingVisitor visit, void* context);
+
+template <typename Fn>
+void forEachBaseSetting(Fn& fn) {
+  forEachBaseSetting([](void* context, SettingInfo& info) { (*static_cast<Fn*>(context))(info); }, &fn);
+}
+
+// Collects the same descriptors into an owned list for settings screens.
+std::vector<SettingInfo> getBaseSettingsList();
 
 inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* registry = nullptr,
                                                 const DictionaryRegistry* dictRegistry = nullptr) {

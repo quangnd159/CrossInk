@@ -221,8 +221,8 @@ class DictionaryWordSelectActivity final : public Activity {
 
   void clearFrontButtonHintArea();
   void openDictionarySwitch();
-  void renderDefinitionBackground();
-  static void renderDefinitionBackgroundCallback(void* context);
+  bool renderDefinitionBackground(bool fastOnly = false);
+  static bool renderDefinitionBackgroundCallback(void* context, bool fastOnly);
   bool buildWorkingSet(bool consumeInitialConfirm);
   void suspendWorkingSet();
 
@@ -238,6 +238,8 @@ class DictionaryWordSelectActivity final : public Activity {
   std::string finishTouchLookupPhrase();
   void resetCrossPageSelection();
   void finishWithClippingRequest();
+  void presentReaderPage();
+  void cancelToReader();
   bool appendText(const char* text, size_t length, uint16_t& offset);
   bool appendMergedText(const char* first, size_t firstLength, const char* second, size_t secondLength,
                         uint16_t& offset);

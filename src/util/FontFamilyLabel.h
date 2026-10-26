@@ -1,5 +1,6 @@
 #pragma once
 
+#include <I18n.h>
 #include <SdCardFontRegistry.h>
 
 #include <cstdint>
@@ -43,7 +44,7 @@ inline std::string fontFamilyLabel(const std::string_view familyName, const Font
     label += "-";
     label += std::to_string(range.last);
   }
-  label += "pt";
+  label += tr(STR_POINT_UNIT);
   label += ")";
   return label;
 }

@@ -338,7 +338,7 @@ bool FontDownloadActivity::fetchAndParseManifest() {
       return false;
     }
     LOG_ERR("FONT", "Failed to fetch manifest from %s", FONT_MANIFEST_URL);
-    errorMessage_ = "Failed to fetch font list";
+    errorMessage_ = tr(STR_FONT_LIST_FETCH_FAILED);
     return false;
   }
 
@@ -347,7 +347,7 @@ bool FontDownloadActivity::fetchAndParseManifest() {
   if (!Storage.openFileForRead("FONT", MANIFEST_TMP, manifestFile)) {
     LOG_ERR("FONT", "Failed to open temp manifest");
     Storage.remove(MANIFEST_TMP);
-    errorMessage_ = "Failed to read font list";
+    errorMessage_ = tr(STR_FONT_LIST_READ_FAILED);
     return false;
   }
 
@@ -364,14 +364,14 @@ bool FontDownloadActivity::fetchAndParseManifest() {
 
     if (err) {
       LOG_ERR("FONT", "Manifest parse error: %s", err.c_str());
-      errorMessage_ = "Invalid font manifest";
+      errorMessage_ = tr(STR_FONT_MANIFEST_INVALID);
       return false;
     }
 
     int version = doc["version"] | 0;
     if (version != FONTS_MANIFEST_VERSION) {
       LOG_ERR("FONT", "Unsupported manifest version: %d", version);
-      errorMessage_ = "Unsupported manifest version";
+      errorMessage_ = tr(STR_FONT_MANIFEST_UNSUPPORTED);
       return false;
     }
 
@@ -393,7 +393,7 @@ bool FontDownloadActivity::fetchAndParseManifest() {
         uint8_t pointSize = 0;
         if (!parseManifestPointSize(fileName, pointSize)) {
           LOG_ERR("FONT", "Malformed manifest file entry: invalid filename %s", fileName);
-          errorMessage_ = "Invalid font manifest";
+          errorMessage_ = tr(STR_FONT_MANIFEST_INVALID);
           return false;
         }
         if (CrossPointSettings::isSdFontPointSizeAllowedForRange(pointSize, SETTINGS.sdFontSizeRange)) {
@@ -454,7 +454,7 @@ bool FontDownloadActivity::fetchAndParseManifest() {
       if (!internManifestString(fObj["name"] | "", family.name) ||
           !internManifestString(fObj["description"] | "", family.description) ||
           !internManifestString(fObj["languages"] | "", family.languages)) {
-        errorMessage_ = "Invalid font manifest";
+        errorMessage_ = tr(STR_FONT_MANIFEST_INVALID);
         return false;
       }
 
@@ -466,7 +466,7 @@ bool FontDownloadActivity::fetchAndParseManifest() {
         const char* const fileName = fileObj["name"] | "";
         if (!parseManifestPointSize(fileName, file.pointSize)) {
           LOG_ERR("FONT", "Malformed manifest file entry: invalid filename %s", fileName);
-          errorMessage_ = "Invalid font manifest";
+          errorMessage_ = tr(STR_FONT_MANIFEST_INVALID);
           return false;
         }
 
@@ -475,14 +475,14 @@ bool FontDownloadActivity::fetchAndParseManifest() {
         }
 
         if (!internManifestString(fileName, file.name)) {
-          errorMessage_ = "Invalid font manifest";
+          errorMessage_ = tr(STR_FONT_MANIFEST_INVALID);
           return false;
         }
         file.size = fileObj["size"] | 0;
 
         if (!fileObj["crc32"].is<uint32_t>()) {
           LOG_ERR("FONT", "Malformed manifest file entry: missing or invalid crc32 for %s", file.name);
-          errorMessage_ = "Invalid font manifest";
+          errorMessage_ = tr(STR_FONT_MANIFEST_INVALID);
           return false;
         }
         file.crc32 = fileObj["crc32"].as<uint32_t>();
@@ -836,7 +836,7 @@ void FontDownloadActivity::downloadFamily(ManifestFamily& family) {
   if (!fontInstaller_.ensureFamilyDir(family.installName.c_str())) {
     RenderLock lock(*this);
     state_ = ERROR;
-    errorMessage_ = "Failed to create font directory";
+    errorMessage_ = tr(STR_FONT_DIR_CREATE_FAILED);
     return;
   }
 
@@ -942,20 +942,20 @@ void FontDownloadActivity::downloadFamily(ManifestFamily& family) {
     if (!computeFileCrc32(tempPath, actualCrc)) {
       LOG_ERR("FONT", "Failed to open file for CRC check: %s", tempPath);
       Storage.remove(tempPath);
-      failDownload(std::string("Could not verify downloaded file: ") + file.name, tr(STR_FONT_DOWNLOAD_CHECKSUM_HINT));
+      failDownload(std::string(tr(STR_FONT_VERIFY_FAILED)) + ": " + file.name, tr(STR_FONT_DOWNLOAD_CHECKSUM_HINT));
       return;
     }
     if (actualCrc != file.crc32) {
       LOG_ERR("FONT", "CRC32 mismatch for %s: got %08x expected %08x", file.name, actualCrc, file.crc32);
       Storage.remove(tempPath);
-      failDownload(std::string("Downloaded file did not match: ") + file.name, tr(STR_FONT_DOWNLOAD_CHECKSUM_HINT));
+      failDownload(std::string(tr(STR_FONT_HASH_MISMATCH)) + ": " + file.name, tr(STR_FONT_DOWNLOAD_CHECKSUM_HINT));
       return;
     }
 
     if (!fontInstaller_.validateCpfontFile(tempPath)) {
       LOG_ERR("FONT", "Invalid .cpfont: %s", tempPath);
       Storage.remove(tempPath);
-      failDownload(std::string("Downloaded font file was invalid: ") + file.name, tr(STR_FONT_DOWNLOAD_CHECKSUM_HINT));
+      failDownload(std::string(tr(STR_FONT_FILE_INVALID)) + ": " + file.name, tr(STR_FONT_DOWNLOAD_CHECKSUM_HINT));
       return;
     }
 
@@ -969,7 +969,7 @@ void FontDownloadActivity::downloadFamily(ManifestFamily& family) {
     if (hadExistingFile && !Storage.rename(destPath, backupPath)) {
       LOG_ERR("FONT", "Failed to back up existing font file: %s", destPath);
       Storage.remove(tempPath);
-      failDownload(std::string("Could not replace existing font file: ") + file.name, "");
+      failDownload(std::string(tr(STR_FONT_REPLACE_FAILED)) + ": " + file.name, "");
       return;
     }
     if (!Storage.rename(tempPath, destPath)) {
@@ -978,7 +978,7 @@ void FontDownloadActivity::downloadFamily(ManifestFamily& family) {
       if (hadExistingFile) {
         Storage.rename(backupPath, destPath);
       }
-      failDownload(std::string("Could not save downloaded font file: ") + file.name, "");
+      failDownload(std::string(tr(STR_FONT_SAVE_FAILED)) + ": " + file.name, "");
       return;
     }
     if (!fontInstaller_.validateCpfontFile(destPath)) {
@@ -987,7 +987,7 @@ void FontDownloadActivity::downloadFamily(ManifestFamily& family) {
       if (hadExistingFile) {
         Storage.rename(backupPath, destPath);
       }
-      failDownload(std::string("Downloaded font file was invalid: ") + file.name, tr(STR_FONT_DOWNLOAD_CHECKSUM_HINT));
+      failDownload(std::string(tr(STR_FONT_FILE_INVALID)) + ": " + file.name, tr(STR_FONT_DOWNLOAD_CHECKSUM_HINT));
       return;
     }
     if (hadExistingFile) {
@@ -1033,7 +1033,7 @@ void FontDownloadActivity::onDeleteConfirmationResult(const ActivityResult& resu
   if (fontInstaller_.deleteFamily(family.installName.c_str()) != FontInstaller::Error::OK) {
     RenderLock lock(*this);
     state_ = ERROR;
-    errorMessage_ = "Failed to delete font";
+    errorMessage_ = tr(STR_FONT_DELETE_FAILED);
   } else {
     fontsChanged_ = true;
     fontInstaller_.refreshRegistry();

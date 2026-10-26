@@ -452,8 +452,8 @@ uint16_t CrossPointSettings::getReadingIdleTimeThresholdSeconds() const {
 
 void CrossPointSettings::toJson(JsonDocument& doc) const {
   std::lock_guard<std::mutex> lock(_mutex);
-  for (const auto& info : getBaseSettingsList()) {
-    if (!info.key || (!info.valuePtr && !info.value16Ptr && !info.stringOffset)) continue;
+  auto visitSetting = [&](const SettingInfo& info) {
+    if (!info.key || (!info.valuePtr && !info.value16Ptr && !info.stringOffset)) return;
     if (info.stringOffset) {
       const char* value = reinterpret_cast<const char*>(this) + info.stringOffset;
       if (info.obfuscated) {
@@ -470,7 +470,8 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
       if (isSleepScreenSetting(info)) value = sleepScreenModeToStorage(value);
       doc[info.key] = value;
     }
-  }
+  };
+  forEachBaseSetting(visitSetting);
 
   JsonArray displaySlots = doc["displayStatusBar"].to<JsonArray>();
   for (const auto item : displayStatusBar.slots) displaySlots.add(static_cast<uint8_t>(item));
@@ -537,15 +538,15 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc, bool importingCrossPoint
   if (doc["statusBarChapterPageCount"].isNull()) applyLegacyStatusBarSettings(*this);
   screenInverted = clamp(doc["screenInverted"] | screenInverted, 2, screenInverted);
 
-  for (const auto& info : getBaseSettingsList()) {
-    if (!info.key || (!info.valuePtr && !info.value16Ptr && !info.stringOffset)) continue;
+  auto visitSetting = [&](const SettingInfo& info) {
+    if (!info.key || (!info.valuePtr && !info.value16Ptr && !info.stringOffset)) return;
     if (info.stringOffset) {
       char* destination = reinterpret_cast<char*>(this) + info.stringOffset;
       if (info.stringMaxLen == 0) {
         LOG_ERR("CPS", "Misconfigured SettingInfo: stringMaxLen is 0 for key '%s'", info.key);
         destination[0] = '\0';
         needsResave = true;
-        continue;
+        return;
       }
       const std::string fieldDefault = destination;
       std::string value;
@@ -580,7 +581,7 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc, bool importingCrossPoint
         destination[0] = '\0';
         needsResave = true;
       }
-      continue;
+      return;
     }
 
     if (info.value16Ptr) {
@@ -590,7 +591,7 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc, bool importingCrossPoint
         value = std::clamp(value, info.valueRange.min, info.valueRange.max);
       }
       this->*(info.value16Ptr) = value;
-      continue;
+      return;
     }
 
     // Older exports have no global status font size. Importing one must restore
@@ -608,7 +609,7 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc, bool importingCrossPoint
       value = sleepScreenStorageToMode(storedValue);
       if (sleepScreenModeToStorage(value) != storedValue) needsResave = true;
       this->*(info.valuePtr) = value;
-      continue;
+      return;
     }
     if (strcmp(info.key, "fontSize") == 0 && !doc["fontSize"].isNull() && value < MIN_READER_FONT_POINT_SIZE) {
       if (doc["sdFontFamilyName"].is<const char*>() && doc["sdFontFamilyName"].as<const char*>()[0] != '\0') {
@@ -629,7 +630,8 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc, bool importingCrossPoint
       value = std::clamp(value, static_cast<uint8_t>(info.valueRange.min), static_cast<uint8_t>(info.valueRange.max));
     }
     this->*(info.valuePtr) = value;
-  }
+  };
+  forEachBaseSetting(visitSetting);
 
   // Old settings assigned one layout and one long-press mode to both side
   // buttons. Populate only missing new keys so partially upgraded settings

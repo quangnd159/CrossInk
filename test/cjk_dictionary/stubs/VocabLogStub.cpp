@@ -3,4 +3,5 @@
 
 namespace VocabLog {
 bool append(const char*, const std::string&) { return true; }
+void stage(const char*, std::string) {}
 }  // namespace VocabLog

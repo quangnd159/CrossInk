@@ -19,7 +19,10 @@
 
 class DictionaryDefinitionActivity final : public Activity {
  public:
-  using BackgroundRenderFn = void (*)(void* context);
+  // Redraws the reader page behind the modal. With fastOnly the callee may only
+  // restore a saved copy of the page (no reader font needed) and returns
+  // whether it did; otherwise it renders the page and returns true.
+  using BackgroundRenderFn = bool (*)(void* context, bool fastOnly);
 
   // showLookupButton=true:
   //   Confirm = enter word-select mode on the definition text (Look Up Word).
@@ -79,6 +82,8 @@ class DictionaryDefinitionActivity final : public Activity {
   bool chainBackNavInProgress = false;
   bool dictionarySwitchLookupInProgress = false;
   void navigateBack();
+  // Put the reader page back on screen before a dismiss tears this flow down.
+  void presentReaderPage();
   bool exitAllOnBackRelease_ = false;
   // The reader activity beneath this modal owns the page and outlives us. A
   // small callback lets it redraw that page without retaining a second 48 KB
@@ -217,7 +222,12 @@ class DictionaryDefinitionActivity final : public Activity {
   bool dictionarySwitchButtonContains(int x, int y) const;
   bool dictionaryCreateClippingButtonContains(int x, int y) const;
   bool modalContains(int x, int y) const;
+  bool saveWordButtonContains(int x, int y) const;
 #endif
+  // A Mandarin lookup staged a vocabulary row; the popup offers Save Word.
+  bool showSaveWord() const;
+  void saveWord();
+  bool saveWordFailed_ = false;
   int dictionaryFooterHeight() const;
   bool hasModalBackground() const { return backgroundContext_ && backgroundRender_; }
   void sizeModalForCurrentPage();

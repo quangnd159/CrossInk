@@ -118,15 +118,16 @@ bool HalClock::formatTime(char* buf, size_t bufSize, uint8_t utcOffsetQuarterHou
 
   const int hour24 = totalMinutes / 60;
   const int min = totalMinutes % 60;
+  int length;
   if (use12Hour) {
     const bool pm = hour24 >= 12;
     int hour12 = hour24 % 12;
     if (hour12 == 0) hour12 = 12;
-    snprintf(buf, bufSize, "%d:%02d %s", hour12, min, pm ? "PM" : "AM");
+    length = snprintf(buf, bufSize, "%d:%02d %s", hour12, min, meridiemLabel(pm));
   } else {
-    snprintf(buf, bufSize, "%02d:%02d", hour24, min);
+    length = snprintf(buf, bufSize, "%02d:%02d", hour24, min);
   }
-  return true;
+  return length >= 0 && static_cast<size_t>(length) < bufSize;
 }
 
 bool HalClock::getDate(uint16_t& year, uint8_t& month, uint8_t& day, uint8_t& hour, uint8_t& minute) const {

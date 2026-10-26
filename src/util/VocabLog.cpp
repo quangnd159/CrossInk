@@ -4,9 +4,19 @@
 #include <Logging.h>
 #include <common/FsApiConstants.h>
 
+#include <atomic>
+
 namespace VocabLog {
 namespace {
 std::string g_lastHeadword;
+
+// One staged row. The lookup worker writes it before setting g_staged; render
+// reads only the atomics, and saveStaged() runs on the main loop after the
+// lookup finished, so the string is never touched by two tasks at once.
+const char* g_stagedPath = nullptr;
+std::string g_stagedRow;
+std::atomic<bool> g_staged{false};
+std::atomic<bool> g_stagedSaved{false};
 
 std::string parentOf(const char* path) {
   const std::string p(path);
@@ -17,7 +27,8 @@ std::string parentOf(const char* path) {
 
 bool append(const char* path, const std::string& row) {
   const std::string headword = row.substr(0, row.find('\t'));
-  if (headword.empty() || headword == g_lastHeadword) return false;
+  if (headword.empty()) return false;
+  if (headword == g_lastHeadword) return true;
 
   if (!Storage.ensureDirectoryExists(parentOf(path).c_str())) {
     LOG_ERR("VOCAB", "Cannot create folder for %s", path);
@@ -40,6 +51,34 @@ bool append(const char* path, const std::string& row) {
     return false;
   }
   g_lastHeadword = headword;
+  return true;
+}
+
+void stage(const char* path, std::string row) {
+  g_staged = false;
+  g_stagedPath = path;
+  g_stagedRow = std::move(row);
+  g_stagedSaved = false;
+  g_staged = !g_stagedRow.empty();
+}
+
+void clearStaged() {
+  g_staged = false;
+  g_stagedSaved = false;
+  g_stagedRow.clear();
+  g_stagedRow.shrink_to_fit();
+}
+
+bool hasStaged() { return g_staged; }
+
+bool stagedSaved() { return g_staged && g_stagedSaved; }
+
+bool saveStaged() {
+  if (!g_staged || !g_stagedPath) return false;
+  if (g_stagedSaved) return true;
+  if (!append(g_stagedPath, g_stagedRow)) return false;
+  g_stagedSaved = true;
+  LOG_INF("VOCAB", "Saved %s", g_stagedRow.substr(0, g_stagedRow.find('\t')).c_str());
   return true;
 }
 

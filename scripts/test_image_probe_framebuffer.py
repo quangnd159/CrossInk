@@ -102,6 +102,11 @@ BookReaderSettingsData loadBookReaderSettingsFile(const std::string&) { return {
 struct DictionaryClippingRequest {};
 struct ActivityResult { std::variant<std::monostate, DictionaryClippingRequest> data; };
 namespace MemoryBudget { void logHeapShape(const char*) {} }
+namespace DictionaryReturnFrame {
+void capture(const GfxRenderer&) {}
+void invalidate() {}
+bool present(GfxRenderer&) { return false; }
+}  // namespace DictionaryReturnFrame
 void releaseReaderSdFontCachesForLowMemory(GfxRenderer&, const char*, const char*) {}
 void drawToast(GfxRenderer&, int) {}
 void delay(int) {}

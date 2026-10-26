@@ -79,7 +79,7 @@ void ClockSyncActivity::runSync() {
   SETTINGS.saveToFile();
 
   // Read the freshly synced time back for the user-facing confirmation.
-  char buf[9];
+  char buf[sizeof(syncedTime)];
   if (halClock.formatTime(buf, sizeof(buf), SETTINGS.clockUtcOffsetQ, SETTINGS.clockFormat == 1)) {
     snprintf(syncedTime, sizeof(syncedTime), "%s", buf);
   }

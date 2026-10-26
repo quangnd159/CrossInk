@@ -680,8 +680,12 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
     content.stablePageCount = 540;
     content.bookTitle = tr(STR_EXAMPLE_BOOK);
     content.chapterTitle = tr(STR_EXAMPLE_CHAPTER);
-    content.timeLeftBook = "3h 40m";
-    content.timeLeftChapter = "1h 20m";
+    char timeLeftBook[24];
+    char timeLeftChapter[24];
+    snprintf(timeLeftBook, sizeof(timeLeftBook), tr(STR_DURATION_HOURS_MINUTES_SHORT_FORMAT), 3UL, 40UL);
+    snprintf(timeLeftChapter, sizeof(timeLeftChapter), tr(STR_DURATION_HOURS_MINUTES_SHORT_FORMAT), 1UL, 20UL);
+    content.timeLeftBook = timeLeftBook;
+    content.timeLeftChapter = timeLeftChapter;
     content.previewClock = "12:34";
     content.previewOriginY = previewOriginY;
     const auto displayConfig = SETTINGS.displayStatusBar.asReaderConfig();

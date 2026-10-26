@@ -21,7 +21,7 @@ class ClockSyncActivity final : public Activity {
   enum State { SYNCING, SUCCESS, NO_WIFI, FAILED };
   State state = SYNCING;
   ScreenTransitionRefresh screenTransitionRefresh;
-  char syncedTime[16] = {0};
+  char syncedTime[32] = {0};  // Includes translated UTF-8 AM/PM markers.
   bool shouldTearDownWifiOnExit = false;
 
   void runSync();

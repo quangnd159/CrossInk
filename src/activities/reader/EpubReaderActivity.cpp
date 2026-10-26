@@ -84,6 +84,7 @@
 #include "util/BookCacheUtils.h"
 #include "util/BookMoveUtils.h"
 #include "util/Dictionary.h"
+#include "util/DictionaryReturnFrame.h"
 #include "util/ScreenshotUtil.h"
 
 namespace {
@@ -2593,8 +2594,7 @@ void EpubReaderActivity::onExit() {
 #if CROSSINK_SCALABLE_FONTS
   bookFontSystem.close();
 #endif
-  dictionaryReturnFrame_.reset();
-  dictionaryReturnFrameValid_ = false;
+  DictionaryReturnFrame::release();
   section.reset();
   if (epub && !saveLinkStack()) {
     LOG_ERR("ERS", "Failed to save link return stack on exit");
@@ -3982,33 +3982,6 @@ std::unique_ptr<Page> EpubReaderActivity::reloadDictionaryLookupPageCallback(voi
   return static_cast<EpubReaderActivity*>(context)->reloadDictionaryLookupPage(pageOffset);
 }
 
-// Caller holds RenderLock and has verified the framebuffer shows the current page.
-void EpubReaderActivity::captureDictionaryReturnFrame() {
-  const size_t bytes = renderer.getBufferSize();
-  if (!dictionaryReturnFrame_) {
-    // Lazily allocated once per book and reused for every lookup. PSRAM only:
-    // on the C3 this fails and dismissal keeps the plain re-render path.
-    dictionaryReturnFrame_ = makePsramByteBufferNoThrow(bytes);
-    if (!dictionaryReturnFrame_) {
-      LOG_DBG("DICT", "No PSRAM for dictionary return frame (%u bytes); dismiss will re-render",
-              static_cast<unsigned>(bytes));
-      return;
-    }
-  }
-  memcpy(dictionaryReturnFrame_.get(), renderer.getFrameBuffer(), bytes);
-  dictionaryReturnFrameValid_ = true;
-}
-
-void EpubReaderActivity::restoreDictionaryReturnFrame() {
-  if (!dictionaryReturnFrameValid_ || !dictionaryReturnFrame_) return;
-  dictionaryReturnFrameValid_ = false;
-  RenderLock lock(*this);
-  memcpy(renderer.getFrameBuffer(), dictionaryReturnFrame_.get(), renderer.getBufferSize());
-  // Same pixels the following render() produces, so its refresh is a no-op
-  // apart from text anti-aliasing; this one removes the modal right away.
-  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
-}
-
 void EpubReaderActivity::openWordSelect(bool framebufferContainsPage, int initialTouchX, int initialTouchY,
                                         bool autoLookupInitialWord) {
   std::unique_ptr<Page> pageForLookup;
@@ -4020,8 +3993,8 @@ void EpubReaderActivity::openWordSelect(bool framebufferContainsPage, int initia
   {
     RenderLock lock(*this);
     framebufferContainsPage = framebufferContainsPage && !pageBufferStale.load(std::memory_order_relaxed);
-    dictionaryReturnFrameValid_ = false;
-    if (framebufferContainsPage) captureDictionaryReturnFrame();
+    DictionaryReturnFrame::invalidate();
+    if (framebufferContainsPage) DictionaryReturnFrame::capture(renderer);
     if (!section || !epub) {
       requestUpdate();
       return;
@@ -4075,12 +4048,17 @@ void EpubReaderActivity::openWordSelect(bool framebufferContainsPage, int initia
   }
   startActivityForResult(std::move(wordSelect), [this](const ActivityResult& result) {
     if (const auto* request = std::get_if<DictionaryClippingRequest>(&result.data)) {
-      dictionaryReturnFrameValid_ = false;
+      DictionaryReturnFrame::invalidate();
       resumeReadingPaceTimer("dictionary_lookup_to_clip");
       startClipSelection(request);
       return;
     }
-    restoreDictionaryReturnFrame();
+    {
+      // Usually already shown by the dismissing dictionary screen; this covers
+      // any exit path that did not present it.
+      RenderLock lock(*this);
+      DictionaryReturnFrame::present(renderer);
+    }
     resumeReadingPaceTimer("dictionary_lookup_return");
     MemoryBudget::logHeapShape("dict.child_destroyed");
     // Dictionary lookup warms multiple SD-font styles and large definition glyph

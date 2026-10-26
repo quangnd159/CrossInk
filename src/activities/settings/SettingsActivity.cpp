@@ -145,11 +145,11 @@ std::string formatUtcOffset(uint8_t biasedQ) {
 std::string formatCompactDuration(const uint32_t seconds) {
   char buf[24];
   if (seconds < 60) {
-    snprintf(buf, sizeof(buf), "%lus", static_cast<unsigned long>(seconds));
+    snprintf(buf, sizeof(buf), tr(STR_DURATION_SECONDS_SHORT_FORMAT), static_cast<unsigned long>(seconds));
   } else if (seconds % 60 == 0) {
-    snprintf(buf, sizeof(buf), "%lum", static_cast<unsigned long>(seconds / 60));
+    snprintf(buf, sizeof(buf), tr(STR_DURATION_MINUTES_SHORT_FORMAT), static_cast<unsigned long>(seconds / 60));
   } else {
-    snprintf(buf, sizeof(buf), "%lum %lus", static_cast<unsigned long>(seconds / 60),
+    snprintf(buf, sizeof(buf), tr(STR_DURATION_MINUTES_SECONDS_SHORT_FORMAT), static_cast<unsigned long>(seconds / 60),
              static_cast<unsigned long>(seconds % 60));
   }
   return buf;

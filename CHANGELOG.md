@@ -1,3 +1,16 @@
+## [1.6.1.3] - 2026-10-26 (Mandarin learner fork)
+
+### Changed
+
+- Looking up a Chinese word no longer adds it to `/vocab/mandarin.tsv`. Press **Save Word** in the definition popup to keep it (next to Switch Dictionary on touch readers, Right on button readers).
+- Settings are no longer kept in memory for the whole session, which frees about 10 KB on X3/X4 readers (CrossPoint #4085).
+
+### Fixed
+
+- Tapping outside a dictionary definition or word selection on S3 readers clears it as soon as the screen can refresh, instead of after the dictionary has finished closing.
+- Opening a definition, and returning to it from the dictionary picker, no longer redraws the page behind it on S3 readers.
+- With the Chinese menus installed, the Dashboard and Lyra Carousel themes, reading stats, the status bar, the reader drawer, settings and the clock no longer show English. Durations (12分, 1小时5分), dates (2026年12月31日, 10月3日), AM/PM, font sizes (14磅), the auto page-turn interval and font download, image and nearby stats sync errors are translated. Other languages get the same strings.
+
 ## [1.6.1.2] - 2026-10-24 (Mandarin learner fork)
 
 ### Added

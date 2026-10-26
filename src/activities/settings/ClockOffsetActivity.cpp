@@ -332,7 +332,7 @@ void ClockOffsetActivity::render(RenderLock&&) {
 
   // Live preview of the resulting wall-clock time, so users can verify against a watch.
   if (halClock.isAvailable()) {
-    char timeBuf[9];
+    char timeBuf[32];  // Room for translated UTF-8 AM/PM markers.
     const uint8_t encoded = encodeOffset(sign, hours, minutesQuarter);
     if (halClock.formatTime(timeBuf, sizeof(timeBuf), encoded, SETTINGS.clockFormat == 1)) {
       // STR_CURRENT_TIME alone is 26 bytes in Russian and 24 in Arabic and

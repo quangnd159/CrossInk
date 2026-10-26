@@ -15,13 +15,26 @@ int main(int argc, char** argv) {
   assert(std::strcmp(I18N.getCode(), argv[1]) == 0);
   char date[32];
   if (std::strcmp(argv[1], "EN") == 0) {
+    assert(std::strcmp(meridiemLabel(false), "AM") == 0);
+    assert(std::strcmp(meridiemLabel(true), "PM") == 0);
     assert(formatDateParts(date, sizeof(date), 2026, 10, 3, 0));
     assert(std::strcmp(date, "Oct 03, 2026") == 0);
+    assert(formatShortMonthDay(date, sizeof(date), 10, 3));
+    assert(std::strcmp(date, "Oct 3") == 0);
   } else if (std::strcmp(argv[1], "DE") == 0) {
     assert(formatDateParts(date, sizeof(date), 2026, 10, 3, 0));
     assert(std::strcmp(date, "Okt. 03, 2026") == 0);
     assert(formatDateParts(date, sizeof(date), 2026, 10, 3, 8));
     assert(std::strcmp(date, "03 Oktober") == 0);
+  } else if (std::strcmp(argv[1], "ZH") == 0) {
+    assert(std::strcmp(meridiemLabel(false), "上午") == 0);
+    assert(std::strcmp(meridiemLabel(true), "下午") == 0);
+    assert(formatDateParts(date, sizeof(date), 2026, 10, 3, 0));
+    assert(std::strcmp(date, "2026年10月3日") == 0);
+    assert(formatDateParts(date, sizeof(date), 2026, 10, 3, 8));
+    assert(std::strcmp(date, "10月3日") == 0);
+    assert(formatShortMonthDay(date, sizeof(date), 10, 3));
+    assert(std::strcmp(date, "10月3日") == 0);
   } else if (std::strcmp(argv[1], "FR") == 0) {
     assert(formatDateParts(date, sizeof(date), 2026, 2, 3, 7));
     assert(std::strcmp(date, "février 03") == 0);

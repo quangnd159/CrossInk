@@ -26,6 +26,7 @@
 #include "fontIds.h"
 #include "util/CjkDictionary.h"
 #include "util/Dictionary.h"
+#include "util/VocabLog.h"
 
 DictionaryLookupController::DictionaryLookupController(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                                        Activity& owner, const std::string& cachePath,
@@ -80,6 +81,9 @@ void DictionaryLookupController::startLookup(const std::string& word, bool recor
   lookupReadError = false;
   lookupMatchedStem = false;
   recordHistory_ = recordHistory;
+  // The worker is idle here, so the staged vocabulary row can be dropped
+  // safely; a found Mandarin entry stages its own row for the Save action.
+  VocabLog::clearStaged();
   state = LookupState::LookingUp;
   // CLEANUP: on Auto-only commit, delete only this line (gate below stays — it's the Auto check)
   if (lookupToastEnabled_ && shouldShowPopup()) {
@@ -122,6 +126,8 @@ void DictionaryLookupController::onExit() {
   // The Mandarin pack's index caches (~30 KB) must not outlive the lookup UI:
   // the reader needs that heap back for page layout.
   CjkDictionary::releaseCaches();
+  // An unsaved staged word ends with the lookup UI that offered it.
+  VocabLog::clearStaged();
 }
 
 void DictionaryLookupController::requestBack() {
@@ -139,6 +145,9 @@ DictionaryLookupController::LookupEvent DictionaryLookupController::handleInput(
     if (lookupDone) {
       state = LookupState::Idle;
       if (lookupCancelRequested || lookupCancelled) {
+        // A CJK lookup can stage its row before observing cancellation. The
+        // previous definition stays visible, so never offer that new row there.
+        VocabLog::clearStaged();
         nextIsSuggestion = false;
         return LookupEvent::Cancelled;
       }
@@ -529,8 +538,14 @@ bool DictionaryLookupController::handleConfirmLookup(const WordSelectNavigator& 
 namespace {
 // Sentence-final punctuation, CJK and Latin.
 bool endsSentence(const char* token) {
-  static constexpr const char* kEnders[] = {"\xE3\x80\x82", "\xEF\xBC\x81", "\xEF\xBC\x9F", "\xEF\xBC\x9B",
-                                            "\xE2\x80\xA6", ".", "!", "?"};  // 。！？；… . ! ?
+  static constexpr const char* kEnders[] = {"\xE3\x80\x82",
+                                            "\xEF\xBC\x81",
+                                            "\xEF\xBC\x9F",
+                                            "\xEF\xBC\x9B",
+                                            "\xE2\x80\xA6",
+                                            ".",
+                                            "!",
+                                            "?"};  // 。！？；… . ! ?
   for (const char* ender : kEnders) {
     if (std::strstr(token, ender)) return true;
   }

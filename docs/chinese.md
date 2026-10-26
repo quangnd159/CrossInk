@@ -1,8 +1,8 @@
 # Reading Chinese
 
 This fork is set up for learning Mandarin by reading: tap through a Chinese
-book a word at a time, see pinyin, meanings and HSK level, and collect every
-word you look up into a file you can import into Anki.
+book a word at a time, see pinyin, meanings and HSK level, and save the words
+you want to study into a file you can import into Anki.
 
 ## Quick start with the release bundle
 
@@ -82,8 +82,10 @@ through to your regular dictionary, if you have one.
 
 ## Vocabulary log for Anki
 
-With lookup history turned on, each Chinese lookup adds one line to
-`/vocab/mandarin.tsv`:
+Looking a word up does not save it. To keep a word, press **Save Word** in the
+definition popup (on touch readers it sits next to **Switch Dictionary**; on
+button readers press Right). The button then shows the word is saved, and one line
+is added to `/vocab/mandarin.tsv`:
 
 | Word | Reading | Meaning | Sentence | Book | Level |
 | --- | --- | --- | --- | --- | --- |

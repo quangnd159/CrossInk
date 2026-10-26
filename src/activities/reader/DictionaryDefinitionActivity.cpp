@@ -26,9 +26,11 @@
 #include "fontIds.h"
 #include "util/Dictionary.h"
 #include "util/DictionaryActivityUtils.h"
+#include "util/DictionaryReturnFrame.h"
 #include "util/IpaUtils.h"
 #include "util/LookupHistory.h"
 #include "util/TextPool.h"
+#include "util/VocabLog.h"
 
 namespace {
 Rect dictionaryHeaderRect(const GfxRenderer& renderer, const int contentX, const int gutterWidth,
@@ -420,9 +422,16 @@ void DictionaryDefinitionActivity::reflowForDefinitionFontChange() {
 void DictionaryDefinitionActivity::redrawModalBackground() {
   if (!hasModalBackground() || !modalBackgroundNeedsRedraw_) return;
 
+  // A saved copy of the page avoids the reader render and, with a separate
+  // dictionary font, the reader/dictionary SD-font swap and reflow below.
+  if (backgroundRender_(backgroundContext_, /*fastOnly=*/true)) {
+    modalBackgroundNeedsRedraw_ = false;
+    return;
+  }
+
   if (definitionFontSource_ == DefinitionFontSource::Dictionary) {
     sdFontSystem.restoreReaderFont(renderer);
-    backgroundRender_(backgroundContext_);
+    backgroundRender_(backgroundContext_, false);
     const DictionaryFontActivation activation =
         sdFontSystem.activateDictionaryFont(renderer, dictionaryFontFamilyName_, dictionaryFontPointSize_);
     definitionFontId_ = activation.fontId;
@@ -437,7 +446,7 @@ void DictionaryDefinitionActivity::redrawModalBackground() {
     // drawing; otherwise lines wrapped with stale/narrow widths can overflow.
     reflowForDefinitionFontChange();
   } else {
-    backgroundRender_(backgroundContext_);
+    backgroundRender_(backgroundContext_, false);
   }
   modalBackgroundNeedsRedraw_ = false;
 }
@@ -497,6 +506,16 @@ bool DictionaryDefinitionActivity::showTouchDictionarySwitch() const {
 }
 #endif
 
+bool DictionaryDefinitionActivity::showSaveWord() const {
+  return hasModalBackground() && showLookupButton && VocabLog::hasStaged();
+}
+
+void DictionaryDefinitionActivity::saveWord() {
+  if (VocabLog::stagedSaved()) return;
+  saveWordFailed_ = !VocabLog::saveStaged();
+  requestUpdate();
+}
+
 int DictionaryDefinitionActivity::dictionaryFooterHeight() const {
   if (!hasModalBackground()) return 0;
 
@@ -520,6 +539,11 @@ bool DictionaryDefinitionActivity::dictionaryCreateClippingButtonContains(const 
   const int buttonY = modalY_ + modalHeight_ - kDictionarySwitchTouchHeight;
   return hasClippingRequest_ && x >= modalX_ && x < modalX_ + modalWidth_ && y >= buttonY &&
          y < buttonY + kDictionarySwitchTouchHeight;
+}
+
+bool DictionaryDefinitionActivity::saveWordButtonContains(const int x, const int y) const {
+  // Save Word shares the Switch Dictionary row and takes its right half.
+  return showSaveWord() && dictionarySwitchButtonContains(x, y) && x >= modalX_ + modalWidth_ / 2;
 }
 
 bool DictionaryDefinitionActivity::modalContains(const int x, const int y) const {
@@ -1106,10 +1130,18 @@ void DictionaryDefinitionActivity::openDictionarySwitch() {
 // Input loop
 // ---------------------------------------------------------------------------
 
+void DictionaryDefinitionActivity::presentReaderPage() {
+  // Only a modal over the reader page returns straight to it.
+  if (!hasModalBackground()) return;
+  RenderLock lock(*this);
+  DictionaryReturnFrame::present(renderer);
+}
+
 bool DictionaryDefinitionActivity::handleLongPressExitAll(bool enabled) {
   if (exitAllOnBackRelease_) {
     if (mappedInput.wasReleased(MappedInputManager::Button::Back) ||
         !mappedInput.isPressed(MappedInputManager::Button::Back)) {
+      presentReaderPage();
       setResult(ActivityResult{});
       finish();
     }
@@ -1189,6 +1221,7 @@ void DictionaryDefinitionActivity::navigateBack() {
       return;
     }
   }
+  presentReaderPage();
   DictUtils::cancelAndFinish(*this);
 }
 
@@ -1217,6 +1250,7 @@ void DictionaryDefinitionActivity::loop() {
   int modalTouchY = 0;
   if (hasModalBackground() && mappedInput.hasTouch() && !controller.requiresBackgroundRedrawAfterOverlay() &&
       mappedInput.wasScreenTapped(modalTouchX, modalTouchY) && !modalContains(modalTouchX, modalTouchY)) {
+    presentReaderPage();
     DictUtils::cancelAndFinish(*this);
     return;
   }
@@ -1255,6 +1289,7 @@ void DictionaryDefinitionActivity::loop() {
           dictionarySwitchLookupInProgress = false;
           headword = controller.getFoundWord();
           foundLocation = controller.getFoundLocation();
+          saveWordFailed_ = false;
           wrapText();  // resets currentPage to 0 and loads page 0
           if (wasBackNav) {
             chain_.pop();
@@ -1279,6 +1314,7 @@ void DictionaryDefinitionActivity::loop() {
         break;
       case DictionaryLookupController::LookupEvent::NotFoundDismissedDone:
         dictionarySwitchLookupInProgress = false;
+        presentReaderPage();
         setResult(ActivityResult{});
         finish();
         break;
@@ -1362,6 +1398,11 @@ void DictionaryDefinitionActivity::loop() {
     return;
   }
   if (showTouchDictionarySwitch() && mappedInput.wasScreenTapped(touchX, touchY) &&
+      saveWordButtonContains(touchX, touchY)) {
+    saveWord();
+    return;
+  }
+  if (showTouchDictionarySwitch() && mappedInput.wasScreenTapped(touchX, touchY) &&
       dictionarySwitchButtonContains(touchX, touchY)) {
     openDictionarySwitch();
     return;
@@ -1373,8 +1414,14 @@ void DictionaryDefinitionActivity::loop() {
     return;
   }
 
+  if (showSaveWord() && mappedInput.wasReleased(MappedInputManager::Button::Right)) {
+    saveWord();
+    return;
+  }
+
 #if CROSSINK_APP_CAP_TOUCH
   if (showLookupButton && mappedInput.hasTouch() && mappedInput.wasLeftEdgeGesture()) {
+    presentReaderPage();
     setResult(ActivityResult{});
     finish();
     return;
@@ -1666,11 +1713,24 @@ void DictionaryDefinitionActivity::render(RenderLock&&) {
                           modalY_ + modalHeight_ - kDictionarySwitchTouchHeight * (hasClippingRequest_ ? 2 : 1),
                           modalWidth_, kDictionarySwitchTouchHeight};
     renderer.drawLine(buttonRect.x, buttonRect.y, buttonRect.x + buttonRect.width, buttonRect.y, true);
-    const char* label = tr(STR_SWITCH_DICTIONARY);
-    const int labelX =
-        buttonRect.x + (buttonRect.width - renderer.getTextWidth(UI_10_FONT_ID, label, EpdFontFamily::BOLD)) / 2;
     const int labelY = buttonRect.y + (buttonRect.height - renderer.getLineHeight(UI_10_FONT_ID)) / 2;
-    renderer.drawText(UI_10_FONT_ID, labelX, labelY, label, true, EpdFontFamily::BOLD);
+    const auto drawCenteredLabel = [&](const char* text, const int x, const int width) {
+      const auto visible = renderer.truncatedText(UI_10_FONT_ID, text, width - 8, EpdFontFamily::BOLD);
+      const int labelX = x + (width - renderer.getTextWidth(UI_10_FONT_ID, visible.c_str(), EpdFontFamily::BOLD)) / 2;
+      renderer.drawText(UI_10_FONT_ID, labelX, labelY, visible.c_str(), true, EpdFontFamily::BOLD);
+    };
+    if (showSaveWord()) {
+      const int half = buttonRect.width / 2;
+      drawCenteredLabel(tr(STR_SWITCH_DICTIONARY), buttonRect.x, half);
+      renderer.drawLine(buttonRect.x + half, buttonRect.y, buttonRect.x + half, buttonRect.y + buttonRect.height - 1,
+                        true);
+      const char* saveLabel = VocabLog::stagedSaved() ? tr(STR_WORD_SAVED)
+                              : saveWordFailed_       ? tr(STR_SAVE_WORD_FAILED)
+                                                      : tr(STR_SAVE_WORD);
+      drawCenteredLabel(saveLabel, buttonRect.x + half, buttonRect.width - half);
+    } else {
+      drawCenteredLabel(tr(STR_SWITCH_DICTIONARY), buttonRect.x, buttonRect.width);
+    }
     if (hasClippingRequest_) {
       const Rect clippingRect{modalX_, modalY_ + modalHeight_ - kDictionarySwitchTouchHeight, modalWidth_,
                               kDictionarySwitchTouchHeight};
@@ -1719,7 +1779,8 @@ void DictionaryDefinitionActivity::render(RenderLock&&) {
   // Button hints
   const char* btn2 = inlineFailureFeedback ? tr(STR_DONE) : (showLookupButton ? tr(STR_LOOKUP_SHORT) : "");
   const char* btn3 = showLookupButton ? tr(STR_DICT_SWITCH) : "";
-  const char* btn4 = nullptr;
+  // Hint slots are narrow; a failed save keeps offering Save to retry.
+  const char* btn4 = !showSaveWord() ? nullptr : VocabLog::stagedSaved() ? tr(STR_SAVED) : tr(STR_SAVE);
   const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), btn2, btn3, btn4);
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   wordSelectHintsVisible_ = false;

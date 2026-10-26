@@ -1637,11 +1637,9 @@ void CrossPointWebServer::handlePostStatusBars() {
 }
 
 void CrossPointWebServer::handleGetSettings() const {
-  // The device settings UI needs an owned, mutable copy of the settings list.
-  // The web API only reads it, so iterate the static base list directly rather
-  // than copying its nested vectors and callbacks while WiFi is using the heap.
+  // The web API only reads the settings, so describe them one at a time rather
+  // than building the whole list while WiFi is using the heap.
   sdFontSystem.refreshIfDirty();
-  const auto& settings = getBaseSettingsList();
   const auto& fontFamilies = sdFontSystem.registry().getFamilies();
   const SdCardFontFamilyInfo* selectedSdFamily =
       SETTINGS.sdFontFamilyName[0] == '\0' ? nullptr : sdFontSystem.registry().findFamily(SETTINGS.sdFontFamilyName);
@@ -1654,8 +1652,8 @@ void CrossPointWebServer::handleGetSettings() const {
   bool seenFirst = false;
   JsonDocument doc;
 
-  for (const auto& s : settings) {
-    if (!s.key || !isWebSettingAvailable(s)) continue;  // Skip ACTION-only and unavailable entries.
+  auto emitSetting = [&](const SettingInfo& s) {
+    if (!s.key || !isWebSettingAvailable(s)) return;  // Skip ACTION-only and unavailable entries.
 
     doc.clear();
     doc["key"] = s.key;
@@ -1760,7 +1758,7 @@ void CrossPointWebServer::handleGetSettings() const {
         break;
       }
       default:
-        continue;
+        return;
     }
 
     if (seenFirst) output.append(",");
@@ -1768,7 +1766,8 @@ void CrossPointWebServer::handleGetSettings() const {
     output.flush();
     seenFirst = true;
     yield();  // Allow WiFi and other tasks to run during a slow send.
-  }
+  };
+  forEachBaseSetting(emitSetting);
 
   server->sendContent("]");
   server->sendContent("");

@@ -29,6 +29,7 @@
 #include "fontIds.h"
 #include "util/Dictionary.h"
 #include "util/DictionaryActivityUtils.h"
+#include "util/DictionaryReturnFrame.h"
 
 namespace {
 
@@ -368,7 +369,12 @@ void DictionaryWordSelectActivity::clearFrontButtonHintArea() {
   }
 }
 
-void DictionaryWordSelectActivity::renderDefinitionBackground() {
+bool DictionaryWordSelectActivity::renderDefinitionBackground(const bool fastOnly) {
+  // The reader's saved frame is the page at offset 0. Copying it skips the
+  // two-pass page render and its SD glyph prewarm.
+  if (activePageOffset_ == 0 && DictionaryReturnFrame::copyTo(renderer)) return true;
+  if (fastOnly) return false;
+
   std::unique_ptr<Page> reloadedPage;
   const Page* backgroundPage = page.get();
   if (!backgroundPage && readerPageLoad_) {
@@ -377,7 +383,7 @@ void DictionaryWordSelectActivity::renderDefinitionBackground() {
   }
   if (!backgroundPage) {
     LOG_ERR("DICT", "Cannot redraw dictionary background without a reader page");
-    return;
+    return true;
   }
   const bool foregroundBlack = ReaderUtils::readerForegroundBlack();
   renderer.clearScreen(ReaderUtils::readerBackgroundColor());
@@ -390,10 +396,11 @@ void DictionaryWordSelectActivity::renderDefinitionBackground() {
   backgroundPage->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop, foregroundBlack);  // scan pass
   scope.endScanAndPrewarm();
   backgroundPage->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop, foregroundBlack);
+  return true;
 }
 
-void DictionaryWordSelectActivity::renderDefinitionBackgroundCallback(void* context) {
-  static_cast<DictionaryWordSelectActivity*>(context)->renderDefinitionBackground();
+bool DictionaryWordSelectActivity::renderDefinitionBackgroundCallback(void* context, const bool fastOnly) {
+  return static_cast<DictionaryWordSelectActivity*>(context)->renderDefinitionBackground(fastOnly);
 }
 
 bool DictionaryWordSelectActivity::allocateWorkingSet() {
@@ -997,6 +1004,17 @@ void DictionaryWordSelectActivity::resetCrossPageSelection() {
   crossPageFirstWordWasMerged_ = false;
 }
 
+void DictionaryWordSelectActivity::presentReaderPage() {
+  RenderLock lock(*this);
+  DictionaryReturnFrame::present(renderer);
+}
+
+void DictionaryWordSelectActivity::cancelToReader() {
+  // Clear the selection UI before onExit() releases segmentation and caches.
+  presentReaderPage();
+  DictUtils::cancelAndFinish(*this);
+}
+
 void DictionaryWordSelectActivity::finishWithClippingRequest() {
   if (!hasPendingClippingRequest_) {
     LOG_ERR("CLIP", "Dictionary clipping requested without a selected range");
@@ -1249,7 +1267,7 @@ bool DictionaryWordSelectActivity::handleTouchSelection() {
           y <= word->screenY + word->heightOr(renderer.getLineHeight(SETTINGS.getReaderFontId())))
         return true;
     }
-    DictUtils::cancelAndFinish(*this);
+    cancelToReader();
     return true;
   }
   if (pressed) {
@@ -1342,6 +1360,7 @@ void DictionaryWordSelectActivity::loop() {
         break;
       }
       case DictionaryLookupController::LookupEvent::NotFoundDismissedBack:
+        presentReaderPage();
         setResult(ActivityResult{});
         finish();
         break;
@@ -1349,6 +1368,7 @@ void DictionaryWordSelectActivity::loop() {
         finishWithClippingRequest();
         break;
       case DictionaryLookupController::LookupEvent::NotFoundDismissedDone:
+        presentReaderPage();
         setResult(ActivityResult{});
         finish();
         break;
@@ -1372,7 +1392,7 @@ void DictionaryWordSelectActivity::loop() {
 
   if (navigator.isEmpty()) {
     if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
-      DictUtils::cancelAndFinish(*this);
+      cancelToReader();
     }
     return;
   }
@@ -1384,7 +1404,7 @@ void DictionaryWordSelectActivity::loop() {
   // Check Back early when not in multi-select mode. This allows exit even when
   // confirmReleaseConsumed is stuck true (menu-triggered entry has no Confirm release).
   if (!navigator.isMultiSelecting() && mappedInput.wasReleased(MappedInputManager::Button::Back)) {
-    DictUtils::cancelAndFinish(*this);
+    cancelToReader();
     return;
   }
 
@@ -1401,7 +1421,7 @@ void DictionaryWordSelectActivity::loop() {
   }
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
-    DictUtils::cancelAndFinish(*this);
+    cancelToReader();
     return;
   }
 }

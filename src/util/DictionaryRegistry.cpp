@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <iterator>
 
 #include "Dictionary.h"
 
@@ -19,10 +20,31 @@ static constexpr const char* DICT_ROOT_CANDIDATES[] = {
     "/dictionaries",
 };
 
+// Converted language packs (DictIndex) are not StarDict folders, so they never
+// become entries, but they still drive lookup. DictIndex resolves each language
+// folder under either root independently of the StarDict root chosen below, and
+// a pack holds several .idx files that the StarDict scan rejects as ambiguous, so
+// probe the exact files instead of inferring them from the folder scan.
+static bool hasConvertedPackOnCard() {
+  static constexpr const char* kPackFiles[][2] = {
+      {"/.dictionaries/zh/vocab.idx", "/.dictionaries/zh/vocab.dat"},
+      {"/dictionaries/zh/vocab.idx", "/dictionaries/zh/vocab.dat"},
+      {"/.dictionaries/jp/vocab.idx", "/.dictionaries/jp/vocab.dat"},
+      {"/dictionaries/jp/vocab.idx", "/dictionaries/jp/vocab.dat"},
+      {"/dictionaries/jp/jmdict.idx", "/dictionaries/jp/jmdict.dat"},
+  };
+  return std::any_of(std::begin(kPackFiles), std::end(kPackFiles), [](const auto& pack) {
+    if (!Storage.exists(pack[0]) || !Storage.exists(pack[1])) return false;
+    LOG_DBG("DREG", "Found converted dictionary pack: %s", pack[0]);
+    return true;
+  });
+}
+
 bool DictionaryRegistry::discover() {
   entries_.clear();
   entries_.reserve(16);
   root_.clear();
+  hasConvertedPack_ = hasConvertedPackOnCard();
 
   char resolvedRoot[32];
   const bool foundRoot = std::any_of(
@@ -155,6 +177,7 @@ bool DictionaryRegistry::discover() {
 void DictionaryRegistry::clear() {
   std::vector<DictionaryEntry>().swap(entries_);
   std::string().swap(root_);
+  hasConvertedPack_ = false;
 }
 
 int DictionaryRegistry::indexOf(const std::string& basePath) const {

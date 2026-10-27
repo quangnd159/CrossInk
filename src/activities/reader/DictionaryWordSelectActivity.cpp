@@ -348,6 +348,9 @@ void DictionaryWordSelectActivity::prebuildAdvanceTable() {
 }
 
 void DictionaryWordSelectActivity::clearFrontButtonHintArea() {
+  // Touch boards draw no front button hints (BaseTheme::drawButtonHints), so
+  // there is nothing to make room for; keep the reader's status bar instead.
+  if (mappedInput.hasTouchHardware()) return;
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int hintSize = UITheme::getButtonHintsReserve(renderer);
   const int screenWidth = renderer.getScreenWidth();
@@ -1471,7 +1474,7 @@ void DictionaryWordSelectActivity::render(RenderLock&&) {
       // Clear the bottom strip the caller reserved (status bar OR auto-turn
       // label). Match the menu→lookup path, which wipes via clearScreen() +
       // page->render(); we skipped both, so clear that one region instead.
-      if (reservedBottomHeight_ > 0) {
+      if (reservedBottomHeight_ > 0 && !mappedInput.hasTouchHardware()) {
         int bezelTop, bezelRight, bezelBottom, bezelLeft;
         renderer.getOrientedViewableTRBL(&bezelTop, &bezelRight, &bezelBottom, &bezelLeft);
         const int clearY = renderer.getScreenHeight() - bezelBottom - reservedBottomHeight_;
@@ -1524,22 +1527,28 @@ void DictionaryWordSelectActivity::render(RenderLock&&) {
     renderer.displayBuffer(HalDisplay::FAST_REFRESH);
     return;
   }
-  if (page->hasImages()) {
-    GfxRenderer::FrameBufferLoan loan(renderer);
-    page->prepareImageCaches();
-    loan.end();
-    renderer.clearScreen(ReaderUtils::readerBackgroundColor());
-  }
+  // Touch boards keep the reader's status bars, as the hold-to-lookup fast
+  // path does; the saved reader frame has them and skips both page passes.
+  const bool copiedReaderFrame =
+      mappedInput.hasTouchHardware() && activePageOffset_ == 0 && DictionaryReturnFrame::copyTo(renderer);
+  if (!copiedReaderFrame) {
+    if (page->hasImages()) {
+      GfxRenderer::FrameBufferLoan loan(renderer);
+      page->prepareImageCaches();
+      loan.end();
+      renderer.clearScreen(ReaderUtils::readerBackgroundColor());
+    }
 
-  // Font prewarm: scan pass accumulates text, then prewarm, then real render.
-  // Without this, every cold codepoint cold-misses the 8-slot SD glyph
-  // overflow ring and the page render serializes ~100+ individual SD reads.
-  // Same pattern as EpubReaderActivity::renderContents().
-  auto* fcm = renderer.getFontCacheManager();
-  auto scope = fcm->createPrewarmScope();
-  page->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop, foregroundBlack);  // scan pass
-  scope.endScanAndPrewarm();
-  page->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop, foregroundBlack);
+    // Font prewarm: scan pass accumulates text, then prewarm, then real render.
+    // Without this, every cold codepoint cold-misses the 8-slot SD glyph
+    // overflow ring and the page render serializes ~100+ individual SD reads.
+    // Same pattern as EpubReaderActivity::renderContents().
+    auto* fcm = renderer.getFontCacheManager();
+    auto scope = fcm->createPrewarmScope();
+    page->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop, foregroundBlack);  // scan pass
+    scope.endScanAndPrewarm();
+    page->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop, foregroundBlack);
+  }
 
   // Set up snapshot AND draw the highlight via the differential entry point with
   // prevWordIdx = -1 (no previous highlight to wipe). This both draws the highlight

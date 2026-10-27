@@ -61,7 +61,7 @@ The **Look Up Word** option in the reader menu is only visible when a dictionary
 ### Touchscreen
 
 In an EPUB reader with **Touch Reader Controls** enabled, touch and hold a
-word for about half a second. CrossInk opens word selection on that word; lift
+word for about 0.4 seconds. CrossInk opens word selection on that word; lift
 your finger to show the floating **Look Up** and **Clip** toolbar.
 Drag either selection handle to adjust the highlighted range. To select a phrase,
 keep holding after selection opens, drag to the last word, then lift your
@@ -71,7 +71,7 @@ is available without a dictionary; **Look Up** is disabled until one is active.
 The toolbar sits near the selection and hides while you drag. Press **Back** to clear the range,
 or tap outside the selection and toolbar to return to reading.
 
-From a definition, touch and hold a word for about half a second to start another
+From a definition, touch and hold a word for about 0.4 seconds to start another
 lookup. Keep holding and drag to select a phrase, then lift your finger to look
 it up. Once word selection is open, touching a word starts the range
 immediately.

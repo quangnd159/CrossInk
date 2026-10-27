@@ -23,6 +23,8 @@ class DictionaryRegistry {
 
   const std::vector<DictionaryEntry>& getEntries() const { return entries_; }
   int count() const { return static_cast<int>(entries_.size()); }
+  // True when lookup has any source: a StarDict entry or a converted language pack.
+  bool hasLookupDictionary() const { return !entries_.empty() || hasConvertedPack_; }
   const std::string& root() const { return root_; }
 
   // Index of the entry whose basePath == path, or -1 if not found / path empty.
@@ -41,6 +43,7 @@ class DictionaryRegistry {
 
   std::vector<DictionaryEntry> entries_;  // sorted alphabetically by name
   std::string root_;                      // active dictionary root dir on the SD card
+  bool hasConvertedPack_ = false;         // a DictIndex vocab.idx/vocab.dat pack folder was found
   std::atomic<bool> dirty_{false};
 };
 

@@ -1,3 +1,16 @@
+## [Unreleased] (Mandarin learner fork)
+
+### Changed
+
+- Touch and hold opens word selection after 0.4 seconds instead of 0.5, matching Android's long-press timing.
+- On S3 readers, the next lookup opens instantly after a definition closes. The reader keeps showing the page and waits until you have been idle for 1.5 seconds before redrawing it to restore anti-aliasing, and it no longer drops its font cache after every lookup.
+- On touch readers, the status bar stays on screen while selecting text, and redrawing the selection is faster.
+
+### Fixed
+
+- Touch and hold to look up a word works right after closing a definition. Before, a hold during the page's finishing redraw was ignored, and lifting your finger turned the page.
+- Settings > Reader > Font now shows Dictionary Font and Dictionary Font Size when the only dictionary installed is the Mandarin (or Japanese) pack.
+
 ## [1.6.1.4] - 2026-10-26 (Mandarin learner fork)
 
 ### Fixed

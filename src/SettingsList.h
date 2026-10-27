@@ -787,7 +787,7 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
     }
   }
   if (dictRegistry) {
-    if (dictRegistry->count() > 0) {
+    if (dictRegistry->hasLookupDictionary()) {
       auto fontSizeIt =
           std::find_if(v.begin(), v.end(), [](const SettingInfo& s) { return s.nameId == StrId::STR_FONT_SIZE; });
       const size_t insertIndex =

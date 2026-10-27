@@ -247,6 +247,10 @@ class EpubReaderActivity final : public Activity {
   SideButtonShortcuts sideButtonShortcuts;
   bool frontButtonLongPressHandled = false;
   bool touchDictionaryLookupHandled = false;
+  // A hold that matured while a render owned the framebuffer; opened once it is free.
+  bool pendingTouchDictionaryLookup = false;
+  int pendingTouchDictionaryLookupX = 0;
+  int pendingTouchDictionaryLookupY = 0;
   int pageLoadRetryCount = 0;
   enum class BookmarkFeedbackType : uint8_t {
     Added,
@@ -320,6 +324,13 @@ class EpubReaderActivity final : public Activity {
   // Input should win the next RenderLock race. Keep the incremental parser alive,
   // but do not start another background chunk until the requested render begins.
   std::atomic<bool> backgroundBuildYieldForInput{false};
+  // After a dictionary lookup closes, the panel already shows this page from
+  // DictionaryReturnFrame. The redraw (SD glyph reload plus anti-aliasing) is
+  // postponed until input goes idle so a chained hold opens word select at once.
+  // Set and cleared on the main task; read by render() on the render task.
+  std::atomic<bool> dictionaryReturnRedrawDeferred{false};
+  unsigned long dictionaryReturnShownAtMs = 0;
+  void serviceDeferredDictionaryReturnRedraw();
   // A loan destroys page pixels. The loop normally recomposes under RenderLock;
   // failed storage recovery leaves this set until render() supplies a safe base.
   std::atomic<bool> pageBufferStale{false};
@@ -568,6 +579,9 @@ class EpubReaderActivity final : public Activity {
   }
   bool backgroundSectionBuildHasHeap();
   void idlePrewarmNextPage();
+  // Any redraw the reader requests supersedes a deferred dictionary-return redraw.
+  void requestUpdate(bool immediate = false) override;
+  RequestUpdateResult requestUpdateAndWait() override;
   bool skipLoopDelay() override {
     return backgroundBuildCanUsePageBuffer() && sectionBuildWantsTick() && !backgroundBuildPausedForLowMemory &&
            !backgroundBuildYieldForInput.load(std::memory_order_relaxed);

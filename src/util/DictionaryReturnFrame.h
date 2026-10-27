@@ -20,6 +20,10 @@ void invalidate();
 // Returns false when there is no valid copy.
 bool present(GfxRenderer& renderer);
 
+// True once since the last present(): the panel and framebuffer show the saved
+// page, so the reader can postpone its own redraw. Clears the flag.
+bool consumePresented();
+
 // Copy the saved page into the framebuffer without refreshing or consuming it,
 // so a modal can repaint its backdrop without re-rendering the reader page (or
 // swapping the reader SD font back in). Caller holds RenderLock.

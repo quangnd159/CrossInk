@@ -12,10 +12,12 @@ namespace {
 HeapByteBuffer g_frame;
 size_t g_frameBytes = 0;
 bool g_valid = false;
+bool g_presented = false;
 }  // namespace
 
 void capture(const GfxRenderer& renderer) {
   g_valid = false;
+  g_presented = false;
   const size_t bytes = renderer.getBufferSize();
   if (!g_frame || g_frameBytes != bytes) {
     g_frame = makePsramByteBufferNoThrow(bytes);
@@ -30,7 +32,10 @@ void capture(const GfxRenderer& renderer) {
   g_valid = true;
 }
 
-void invalidate() { g_valid = false; }
+void invalidate() {
+  g_valid = false;
+  g_presented = false;
+}
 
 bool present(GfxRenderer& renderer) {
   if (!g_valid || !g_frame || g_frameBytes != renderer.getBufferSize()) return false;
@@ -39,7 +44,14 @@ bool present(GfxRenderer& renderer) {
   // Same pixels the reader's next render() produces, so its refresh is a no-op
   // apart from text anti-aliasing; this one removes the lookup UI right away.
   renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+  g_presented = true;
   return true;
+}
+
+bool consumePresented() {
+  const bool presented = g_presented;
+  g_presented = false;
+  return presented;
 }
 
 bool copyTo(GfxRenderer& renderer) {
@@ -50,6 +62,7 @@ bool copyTo(GfxRenderer& renderer) {
 
 void release() {
   g_valid = false;
+  g_presented = false;
   g_frame.reset();
   g_frameBytes = 0;
 }

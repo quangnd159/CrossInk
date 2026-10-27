@@ -89,6 +89,10 @@
 
 namespace {
 constexpr unsigned long TOUCH_DICTIONARY_LOOKUP_HOLD_MS = Dictionary::TOUCH_LOOKUP_HOLD_MS;
+// Quiet time after a dictionary closes before the reader restores anti-aliasing.
+// Long enough to read the page and start the next hold; short enough that the
+// grayscale pass lands before anyone looks for it.
+constexpr unsigned long DICTIONARY_RETURN_REDRAW_IDLE_MS = 1500;
 // pagesPerRefresh now comes from SETTINGS.getRefreshFrequency()
 constexpr unsigned long longPressMenuMs = 600;
 constexpr uint16_t DEFAULT_AUTO_PAGE_TURN_INTERVAL_S = 30;
@@ -1012,6 +1016,16 @@ bool releaseReaderSdFontCachesForLowMemory(const GfxRenderer& renderer, const ch
           before.maxAllocHeap, after.maxAllocHeap);
 #endif
   return true;
+}
+
+// PSRAM boards keep SD-font bitmaps in PSRAM, so dropping them after a lookup
+// buys little internal heap and makes the next page draw, and the next lookup's
+// highlight, reread every glyph from SD. Keep them while internal heap is as
+// healthy as an optional rebuild requires; the C3 always releases.
+bool keepReaderSdFontCachesAfterDictionary() {
+  return psramHeapAvailable() &&
+         MemoryBudget::hasHeap(MemoryBudget::snapshot(), MemoryBudget::OPTIONAL_EPUB_REBUILD_MIN_FREE,
+                               MemoryBudget::OPTIONAL_EPUB_REBUILD_MIN_MAX_ALLOC);
 }
 
 int clampPercent(int percent) {
@@ -2553,6 +2567,7 @@ void EpubReaderActivity::onEnter() {
 }
 
 void EpubReaderActivity::onExit() {
+  dictionaryReturnRedrawDeferred.store(false, std::memory_order_release);
   sdFontSystem.setSettingsPersistenceCallback(nullptr, nullptr);
   // Drop the scalable-family catalog retained during reading. The active font
   // and its PSRAM face lifetime remain managed by SdCardFontSystem.
@@ -2849,7 +2864,7 @@ bool EpubReaderActivity::backgroundBuildCanUsePageBuffer() const {
   // Drawers are child activities and suspend this loop. In-reader popups and
   // toast region restores paint in place and must retain their composed base.
   return !pageBufferStale.load(std::memory_order_relaxed) && !quickActionsPopup.isActive() && !pendingRenderModeToast &&
-         !pendingSafeModeToast;
+         !pendingSafeModeToast && !dictionaryReturnRedrawDeferred.load(std::memory_order_relaxed);
 }
 
 bool EpubReaderActivity::backgroundSectionBuildHasHeap() {
@@ -3106,6 +3121,7 @@ void EpubReaderActivity::loop() {
     cancelSilentPrefetchForInput();
   }
 
+  serviceDeferredDictionaryReturnRedraw();
   if (quickActionsPopup.handleInput(mappedInput, [this] { requestUpdate(); })) return;
   if (!epub) {
     // Should never happen
@@ -3945,9 +3961,17 @@ bool EpubReaderActivity::handleTwoFingerRotation(const bool clockwise) {
 }
 
 bool EpubReaderActivity::handleTouchDictionaryLookup() {
-  if (!SETTINGS.touchReaderControls || !mappedInput.hasTouch() || RenderLock::peek() || activeFootnotePreview ||
-      !epub) {
+  if (!SETTINGS.touchReaderControls || !mappedInput.hasTouch() || activeFootnotePreview || !epub) {
+    pendingTouchDictionaryLookup = false;
     return false;
+  }
+
+  if (pendingTouchDictionaryLookup) {
+    if (RenderLock::peek()) return false;
+    pendingTouchDictionaryLookup = false;
+    openWordSelect(/*framebufferContainsPage=*/true, pendingTouchDictionaryLookupX, pendingTouchDictionaryLookupY,
+                   /*autoLookupInitialWord=*/true);
+    return true;
   }
 
   int touchX = 0;
@@ -3962,6 +3986,16 @@ bool EpubReaderActivity::handleTouchDictionaryLookup() {
   }
 
   touchDictionaryLookupHandled = true;
+  if (RenderLock::peek()) {
+    // The page is already on screen while a render finishes (e.g. the
+    // anti-aliasing redraw after a dictionary popup closes). Keep the hold
+    // instead of dropping it, and swallow the lift so it cannot turn the page.
+    mappedInput.suppressCurrentTouchContact();
+    pendingTouchDictionaryLookup = true;
+    pendingTouchDictionaryLookupX = touchX;
+    pendingTouchDictionaryLookupY = touchY;
+    return true;
+  }
   openWordSelect(/*framebufferContainsPage=*/true, touchX, touchY, /*autoLookupInitialWord=*/true);
   return true;
 }
@@ -3989,6 +4023,9 @@ void EpubReaderActivity::openWordSelect(bool framebufferContainsPage, int initia
   std::string bookCachePath;
   std::string nextPageFirstWord;
   bool hasNextPageForLookup = false;
+  // A chained lookup reuses the page already on the panel; its own dismissal
+  // schedules the next deferred redraw.
+  dictionaryReturnRedrawDeferred.store(false, std::memory_order_release);
 
   {
     RenderLock lock(*this);
@@ -4053,20 +4090,33 @@ void EpubReaderActivity::openWordSelect(bool framebufferContainsPage, int initia
       startClipSelection(request);
       return;
     }
+    bool pageOnScreen = false;
     {
       // Usually already shown by the dismissing dictionary screen; this covers
       // any exit path that did not present it.
       RenderLock lock(*this);
       DictionaryReturnFrame::present(renderer);
+      pageOnScreen = DictionaryReturnFrame::consumePresented() && !pageBufferStale.load(std::memory_order_relaxed);
     }
     resumeReadingPaceTimer("dictionary_lookup_return");
     MemoryBudget::logHeapShape("dict.child_destroyed");
     // Dictionary lookup warms multiple SD-font styles and large definition glyph
     // sets. The child activity has been destroyed before this callback runs, so
     // release those renderer-owned caches before the reader rebuilds its page cache.
-    releaseReaderSdFontCachesForLowMemory(renderer, "DICT", "dictionary lookup exit");
+    if (!keepReaderSdFontCachesAfterDictionary()) {
+      releaseReaderSdFontCachesForLowMemory(renderer, "DICT", "dictionary lookup exit");
+    }
     MemoryBudget::logHeapShape("dict.after_font_release");
     pendingHeapShapeReaderRedrawStages.fetch_or(HEAP_SHAPE_REDRAW_DICT, std::memory_order_relaxed);
+    if (pageOnScreen) {
+      // The panel and framebuffer already hold this page. ActivityManager's
+      // post-pop render is skipped; serviceDeferredDictionaryReturnRedraw()
+      // restores anti-aliasing once input is idle, leaving the render lock free
+      // so another hold opens word select without waiting for a redraw.
+      dictionaryReturnShownAtMs = millis();
+      dictionaryReturnRedrawDeferred.store(true, std::memory_order_release);
+      return;
+    }
     requestUpdate();
   });
 }
@@ -6373,7 +6423,40 @@ void EpubReaderActivity::pageTurn(bool isForwardTurn, const char* source) {
 }
 
 // TODO: Failure handling
+void EpubReaderActivity::requestUpdate(const bool immediate) {
+  dictionaryReturnRedrawDeferred.store(false, std::memory_order_release);
+  Activity::requestUpdate(immediate);
+}
+
+RequestUpdateResult EpubReaderActivity::requestUpdateAndWait() {
+  dictionaryReturnRedrawDeferred.store(false, std::memory_order_release);
+  return Activity::requestUpdateAndWait();
+}
+
+void EpubReaderActivity::serviceDeferredDictionaryReturnRedraw() {
+  if (!dictionaryReturnRedrawDeferred.load(std::memory_order_acquire)) return;
+  if (mappedInput.wasAnyPressed()) {
+    // Buttons act on the page right away; let their redraw (or the activity
+    // they open) start from a normally rendered reader.
+    requestUpdate();
+    return;
+  }
+  int heldX = 0;
+  int heldY = 0;
+  // A finger on the glass may be the next lookup. Let it resolve first: a tap
+  // or swipe requests its own redraw, and a hold opens word select.
+  if (mappedInput.isScreenTouchHeld(heldX, heldY)) return;
+  if (millis() - dictionaryReturnShownAtMs < DICTIONARY_RETURN_REDRAW_IDLE_MS || RenderLock::peek()) return;
+  requestUpdate();
+}
+
 void EpubReaderActivity::render(RenderLock&& lock) {
+  if (dictionaryReturnRedrawDeferred.load(std::memory_order_acquire)) {
+    // The framebuffer and panel show this page from DictionaryReturnFrame.
+    // Only ActivityManager's post-pop render reaches here (reader requests
+    // clear the flag), so skipping it keeps the lock free for the next lookup.
+    return;
+  }
 #if CROSSINK_SCALABLE_FONTS
   if (epub)
     bookFontSystem.ensure(

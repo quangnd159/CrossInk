@@ -1,3 +1,14 @@
+## [1.6.1.6] - 2026-10-27 (Mandarin learner fork)
+
+### Changed
+
+- Selecting several Chinese characters now looks up exactly what you selected. If that phrase is not in any dictionary, the definition starts with a note such as "选择优" is not in the dictionary. Showing 选择: instead of quietly showing a shorter word.
+
+### Fixed
+
+- Chinese words such as 选择 are now recognized the same way on every line. Before, lines that the layout stretched to fill the width were read as single characters, so tapping a word selected only one character, and selecting 选 and 择 together looked up only 选.
+- Chinese clauses longer than 32 characters are split into words the same way at every position.
+
 ## [1.6.1.5] - 2026-10-27 (Mandarin learner fork)
 
 ### Changed

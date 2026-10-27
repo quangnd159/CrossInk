@@ -51,6 +51,8 @@ class CjkSegmenter {
   std::unique_ptr<Scratch> scratch_;
 
   // Segment cells [first, first + min(kChunkCells, cellCount - first)); returns
-  // the number of cells the chosen words cover (the last may overrun the chunk).
+  // the number of cells the committed words cover (the last may overrun the
+  // chunk). A chunk followed by more of the run leaves its last kMaxWord cells
+  // for the next chunk.
   int segmentChunk(const std::string& text, const uint16_t* byteAt, int cellCount, int first, uint8_t* lens);
 };

@@ -71,8 +71,13 @@ int CjkSegmenter::segmentChunk(const std::string& text, const uint16_t* byteAt, 
     s.bestLen[p] = bestLen;
   }
 
+  // The DP treats the chunk end as the end of the text, so the split of its last
+  // few cells ignores the characters after it. When the run continues, commit
+  // only words starting a full word length before the end; the next chunk
+  // redoes the tail with that context.
+  const int commitEnd = first + n < cellCount ? std::max(1, n - kMaxWord) : n;
   int p = 0;
-  while (p < n) {
+  while (p < commitEnd) {
     const int len = std::min<int>(std::max<int>(s.bestLen[p], 1), cellCount - (first + p));
     lens[first + p] = static_cast<uint8_t>(len);
     for (int k = 1; k < len; k++) lens[first + p + k] = 0;

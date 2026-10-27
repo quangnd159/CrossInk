@@ -7,6 +7,7 @@
 #include <WordLookup.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 
 #include "VocabLog.h"
@@ -279,19 +280,21 @@ std::string formatEntryHtml(const std::string& headword, const std::string& defi
   return out;
 }
 
-DictLocation locate(const std::string& word, const VocabContext* vocab) {
+DictLocation locate(const std::string& word, const VocabContext* vocab, const char* prefixNoticeFormat) {
   DictLocation loc;
   if (!available()) return loc;
   selectMandarin();
 
   DictEntry entry;
   bool found = DictIndex::lookupExact(word.c_str(), entry);
-  if (!found) {
+  bool isPrefix = false;
+  if (!found && prefixNoticeFormat) {
     // Longest dictionary word at the start of the selection.
     WordLookupResult result;
     if (WordLookup::lookup(word, 0, result)) {
       entry = std::move(result.entry);
       found = true;
+      isPrefix = true;
     }
   }
   if (!found || entry.definition.empty()) {
@@ -302,7 +305,16 @@ DictLocation locate(const std::string& word, const VocabContext* vocab) {
     return loc;
   }
 
-  std::string html = formatEntryHtml(entry.headword, entry.definition);
+  std::string html;
+  if (isPrefix) {
+    // The selection itself is not a word: say so above the entry shown instead.
+    char notice[192];
+    std::snprintf(notice, sizeof(notice), prefixNoticeFormat, word.c_str(), entry.headword.c_str());
+    html += "<p><i>";
+    appendEscaped(html, notice, std::strlen(notice));
+    html += "</i></p>";
+  }
+  html += formatEntryHtml(entry.headword, entry.definition);
   if (vocab) {
     VocabLog::stage(VocabLog::kMandarinPath,
                     formatVocabRow(entry.headword, entry.definition, vocab->sentenceHtml, vocab->book));

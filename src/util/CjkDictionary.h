@@ -29,8 +29,10 @@ bool available();
 // True when `word` contains a Han ideograph and should be tried in the pack.
 bool wantsWord(const std::string& word);
 
-// Look `word` up in the pack. An exact headword wins; otherwise the longest
-// dictionary word at the start of `word` is used (selecting 我们的 finds 我们).
+// Look `word` up in the pack. Only an exact headword matches unless
+// `prefixNoticeFormat` is given; then a miss falls back to the longest dictionary
+// word at the start of `word` (selecting 我们的 finds 我们), and the entry opens
+// with that notice, formatted with the selection and the headword shown (two %s).
 // On success the entry is written to the scratch StarDict file and the returned
 // location points at it. readError is set only for SD failures.
 // When `vocab` is given, a found entry is also staged for the learner's
@@ -40,7 +42,8 @@ struct VocabContext {
   std::string sentenceHtml;  // sentence around the selection, word in <b></b>
   std::string book;
 };
-DictLocation locate(const std::string& word, const VocabContext* vocab = nullptr);
+DictLocation locate(const std::string& word, const VocabContext* vocab = nullptr,
+                    const char* prefixNoticeFormat = nullptr);
 
 // Longest-first dictionary match lengths at `byteOffset` in `text`, used by the
 // word-select segmenter. Bit L-1 of the result is set when the L-character window

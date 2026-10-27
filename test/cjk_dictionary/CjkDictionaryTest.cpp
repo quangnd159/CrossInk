@@ -106,10 +106,24 @@ TEST_F(CjkDictionaryTest, TraditionalFormFindsTheSameEntry) {
   EXPECT_NE(entryHtml(loc).find("<li>bank</li>"), std::string::npos);
 }
 
-TEST_F(CjkDictionaryTest, FallsBackToLongestPrefix) {
+TEST_F(CjkDictionaryTest, SelectionThatIsNoWordIsNotFoundByDefault) {
   const DictLocation loc = CjkDictionary::locate("我们的");
+  EXPECT_FALSE(loc.found);
+  EXPECT_FALSE(loc.readError);
+}
+
+TEST_F(CjkDictionaryTest, FallsBackToLongestPrefixWithNotice) {
+  const DictLocation loc = CjkDictionary::locate("我们的", nullptr, "\"%s\" missing, showing %s:");
   ASSERT_TRUE(loc.found);
   EXPECT_EQ(loc.headword, "我们");
+  EXPECT_EQ(entryHtml(loc).rfind("<p><i>\"我们的\" missing, showing 我们:</i></p><p><b>我们</b>", 0), 0u)
+      << entryHtml(loc);
+}
+
+TEST_F(CjkDictionaryTest, ExactMatchCarriesNoNotice) {
+  const DictLocation loc = CjkDictionary::locate("我们", nullptr, "%s %s");
+  ASSERT_TRUE(loc.found);
+  EXPECT_EQ(entryHtml(loc).rfind("<p><b>我们</b>", 0), 0u) << entryHtml(loc);
 }
 
 TEST_F(CjkDictionaryTest, UnknownWordIsNotFound) {
@@ -142,6 +156,17 @@ TEST_F(CjkDictionaryTest, LongRunsSegmentAcrossChunks) {
     EXPECT_EQ(lens[i], 2) << i;
     EXPECT_EQ(lens[i + 1], 0) << i;
   }
+}
+
+TEST_F(CjkDictionaryTest, ChunkEdgeSplitsLikeTheMiddleOfARun) {
+  // 和尚未 straddles the 32-cell chunk edge (cells 30-32). Scored alone, the
+  // chunk would end on 和尚 and leave 未; with the rest of the run it is 和 + 尚未.
+  std::string text;
+  for (int i = 0; i < 15; i++) text += "学生";
+  text += "和尚未";
+  const auto lens = segment(text);
+  ASSERT_EQ(lens.size(), 33u);
+  EXPECT_EQ(std::vector<int>(lens.begin() + 30, lens.end()), (std::vector<int>{1, 2, 0}));
 }
 
 TEST(CjkDictionaryFormat, EscapesMarkupAndStructuresEntry) {

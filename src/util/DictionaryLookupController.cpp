@@ -703,11 +703,15 @@ void DictionaryLookupController::runLookup() {
     return;
   }
   // Han text goes to the segmentation-ready Mandarin pack first; a miss there
-  // still falls through to the configured StarDict dictionary.
-  if (CjkDictionary::wantsWord(lookupWord) && CjkDictionary::available()) {
-    foundLocation = CjkDictionary::locate(lookupWord, recordHistory_ ? &vocabContext_ : nullptr);
-    vocabContext_.sentenceHtml.clear();
+  // still falls through to the configured StarDict dictionary. Only when both
+  // miss does the pack show the longest word the selection starts with, labelled
+  // as such, so a selected phrase is never silently swapped for a shorter word.
+  const bool mandarin = CjkDictionary::wantsWord(lookupWord) && CjkDictionary::available();
+  const CjkDictionary::VocabContext* vocab = recordHistory_ ? &vocabContext_ : nullptr;
+  if (mandarin) {
+    foundLocation = CjkDictionary::locate(lookupWord, vocab);
     if (foundLocation.found || lookupCancelRequested) {
+      vocabContext_.sentenceHtml.clear();
       lookupReadError = foundLocation.readError;
       lookupCancelled = lookupCancelRequested.load();
       lookupDone = true;
@@ -716,6 +720,15 @@ void DictionaryLookupController::runLookup() {
     }
   }
   foundLocation = Dictionary::locateWithStemVariants(lookupWord, &lookupMatchedStem, cbs, cachePath.c_str());
+  if (mandarin && !foundLocation.found && !lookupCancelRequested) {
+    // A missing or unreadable StarDict must not hide the pack's partial match.
+    DictLocation partial = CjkDictionary::locate(lookupWord, vocab, tr(STR_DICT_PARTIAL_MATCH_FORMAT));
+    if (partial.found || partial.readError) {
+      lookupMatchedStem = false;
+      foundLocation = std::move(partial);
+    }
+  }
+  vocabContext_.sentenceHtml.clear();
   lookupReadError = foundLocation.readError;
   lookupCancelled = lookupCancelRequested.load();
   lookupDone = true;

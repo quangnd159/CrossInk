@@ -148,6 +148,17 @@ bool isRtlWord(const char* word, const bool fallbackRtl) {
   return BidiUtils::detectParagraphLevel(word, fallbackRtl ? 1 : 0) == 1;
 }
 
+// True when `left` ends and `right` starts with unspaced CJK (Han, Kana, CJK
+// punctuation): text that never carries a space between those two characters.
+bool isUnspacedCjkBoundary(const char* left, const char* right) {
+  const auto* leftPtr = reinterpret_cast<const unsigned char*>(left);
+  uint32_t leftCp = 0;
+  while (*leftPtr) leftCp = utf8NextCodepoint(&leftPtr);
+  const auto* rightPtr = reinterpret_cast<const unsigned char*>(right);
+  const uint32_t rightCp = utf8NextCodepoint(&rightPtr);
+  return utf8IsCjkBreakable(leftCp) && utf8IsCjkBreakable(rightCp) && !utf8IsHangul(leftCp) && !utf8IsHangul(rightCp);
+}
+
 // Single-style prewarm/advance-table bitmask: bit 0 = REGULAR, 1 = BOLD,
 // 2 = ITALIC, 3 = BOLD_ITALIC. The `& 0x03` is defensive — Style enum
 // is two bits, but UNDERLINE etc. live in higher bits if ever OR'd in.
@@ -730,7 +741,14 @@ bool DictionaryWordSelectActivity::extractWords() {
           const int previousLeft = previousWord.screenX;
           const int previousRight = previousLeft + previousMeasuredWidth;
           const int gap = currentLeft >= previousLeft ? currentLeft - previousRight : previousLeft - currentRight;
-          joinWithoutSpaceBefore = gap < naturalSpaceWidth / 2;
+          // Justified CJK lines spread their spare width over every gap between
+          // characters, which can exceed half a space; up to half a glyph there is
+          // still stretch, not a space. Splitting at it would cut a word in two.
+          int joinGapLimit = naturalSpaceWidth / 2;
+          if (isUnspacedCjkBoundary(block->visibleWordText(previousIndex), block->visibleWordText(wordIndex))) {
+            joinGapLimit = std::max<int>(joinGapLimit, currentMeasuredWidth / 2);
+          }
+          joinWithoutSpaceBefore = gap < joinGapLimit;
           if (joinWithoutSpaceBefore) {
             previousWord.width = previousMeasuredWidth;
             wordWidth = currentMeasuredWidth;

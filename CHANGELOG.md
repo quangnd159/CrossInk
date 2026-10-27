@@ -1,9 +1,9 @@
-## [Unreleased] (Mandarin learner fork)
+## [1.6.1.5] - 2026-10-27 (Mandarin learner fork)
 
 ### Changed
 
 - Touch and hold opens word selection after 0.4 seconds instead of 0.5, matching Android's long-press timing.
-- On S3 readers, the next lookup opens instantly after a definition closes. The reader keeps showing the page and waits until you have been idle for 1.5 seconds before redrawing it to restore anti-aliasing, and it no longer drops its font cache after every lookup.
+- On S3 readers, a lookup right after closing a definition no longer waits for the page to redraw. The reader keeps showing the page and waits until you have been idle for 1.5 seconds before redrawing it to restore anti-aliasing, and it no longer drops its font cache after every lookup.
 - On touch readers, the status bar stays on screen while selecting text, and redrawing the selection is faster.
 
 ### Fixed
